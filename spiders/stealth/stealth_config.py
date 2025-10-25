@@ -1,31 +1,15 @@
-# stealth/stealth_config.py
+# spiders/stealth/stealth_config.py
+# Configuration defaults for StealthSpider / VPN behavior.
 
-"""
-Configuration mappings and defaults for StealthSpider VPN/Tor regions.
-"""
-
-# Default region if none specified
-DEFAULT_REGION = "hong_kong"
-
-# Supported region aliases -> NordVPN region codes
-SUPPORTED_REGIONS = {
-    "hong_kong": "hong_kong",
-    "hk": "hong_kong",
-    "japan": "japan",
-    "jp": "japan",
-    "korea": "south_korea",
-    "kr": "south_korea",
-    "taiwan": "taiwan",
-    "tw": "taiwan",
-    "singapore": "singapore",
-    "sg": "singapore",
-}
-
-# Default VPN provider
 DEFAULT_VPN_PROVIDER = "nordvpn"
-
-# Default VPN requirement behavior
+DEFAULT_REGION = "hong_kong"
 REQUIRE_VPN_DEFAULT = True
 
-# IP intel check endpoint (used during verification)
-IP_CHECK_URL = "https://ipinfo.io/json"
+# Behavior toggles
+DISCONNECT_BEFORE_LLM = True      # Disconnect VPN before making LLM API calls (recommended)
+RECONNECT_AFTER_LLM = False       # Reconnect VPN after LLM calls (optional)
+OBFUSCATE_BY_DEFAULT = True       # Try to enable obfuscation if provider supports it
+PROTOCOL_DEFAULT = "tcp"          # prefer tcp for stealthy behaviour (OpenVPN over TCP/443)
+CONNECT_TIMEOUT = 30              # seconds to wait for VPN connect
+DISCONNECT_TIMEOUT = 10           # seconds to wait for VPN disconnect
+MAX_CONNECT_RETRIES = 2

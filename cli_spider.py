@@ -55,36 +55,43 @@ def main():
 
     args = parser.parse_args()
 
-    # Init dependencies
-    browser = PlaywrightBrowserClient(headless=not args.no_headless)
-    llm = OpenAIGPTClient()
-    ranker = RelevanceRanker(llm)
-    chunker = TextChunker(max_tokens=args.max_tokens)
+    async def async_main():
+        # Init dependencies
+        browser = PlaywrightBrowserClient(headless=not args.no_headless)
+        llm = OpenAIGPTClient()
+        ranker = RelevanceRanker(llm)
+        chunker = TextChunker(max_tokens=args.max_tokens)
 
-    # ✅ Select spider type
-    if args.stealth:
-        if not STEALTH_AVAILABLE:
-            raise RuntimeError("StealthSpider is not available. Ensure stealth module is installed.")
+        # ✅ Select spider type
+        if args.stealth:
+            if not STEALTH_AVAILABLE:
+                raise RuntimeError("StealthSpider is not available. Ensure stealth module is installed.")
 
-        vpn_provider = args.vpn or DEFAULT_VPN_PROVIDER
-        region = args.region or DEFAULT_REGION
-        require_vpn = not args.no_require_vpn
+            vpn_provider = args.vpn or DEFAULT_VPN_PROVIDER
+            region = args.region or DEFAULT_REGION
+            require_vpn = not args.no_require_vpn
 
-        print(f"[CLI] Using StealthSpider with VPN={vpn_provider}, region={region}, require_vpn={require_vpn}")
-        spider = StealthSpider(
-            browser_client=browser,
-            relevance_ranker=ranker,
-            chunker=chunker,
-            vpn_provider=vpn_provider,
-            region=region,
-            require_vpn=require_vpn,
-        )
-    else:
-        print("[CLI] Using BasicSpider (no VPN enforcement).")
-        spider = BasicSpider(browser, ranker, chunker)
+            print(f"[CLI] Using StealthSpider with VPN={vpn_provider}, region={region}, require_vpn={require_vpn}")
+            spider = StealthSpider(
+                browser_client=browser,
+                relevance_ranker=ranker,
+                chunker=chunker,
+                vpn_provider=vpn_provider,
+                region=region,
+                require_vpn=require_vpn,
+            )
+        else:
+            print("[CLI] Using BasicSpider (no VPN enforcement).")
+            spider = BasicSpider(browser, ranker, chunker)
 
-    asyncio.run(run_spider(spider, args.url, Path(args.output), args.pretty))
-    asyncio.run(browser.close())
+        try:
+            await run_spider(spider, args.url, Path(args.output), args.pretty)
+        finally:
+            # ✅ Ensures browser always closes on SAME event loop
+            await browser.close()
+
+    # ✅ Run within ONE consistent event loop
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":
