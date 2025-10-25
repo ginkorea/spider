@@ -1,7 +1,7 @@
 from typing import List
 from bs4 import BeautifulSoup
-from base.link_metadata import LinkMetadata
-from core_utils.url_utils import canonicalize_url
+from spider_core.base.link_metadata import LinkMetadata
+from spider_core.core_utils.url_utils import canonicalize_url
 
 
 class DeterministicLinkExtractor:

@@ -1,7 +1,7 @@
 import asyncio
 from typing import List, Dict
-from base.link_metadata import LinkMetadata
-from llm.openai_gpt_client import OpenAIGPTClient
+from spider_core.base.link_metadata import LinkMetadata
+from spider_core.llm.openai_gpt_client import OpenAIGPTClient
 
 
 class RelevanceRanker:

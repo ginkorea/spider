@@ -1,7 +1,7 @@
 import asyncio
 from typing import Tuple
 from playwright.async_api import async_playwright, Browser, Page
-from .browser_client import BrowserClient
+from spider_core.browser.browser_client import BrowserClient
 
 
 class PlaywrightBrowserClient(BrowserClient):

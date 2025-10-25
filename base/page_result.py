@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 from datetime import datetime
-from .link_metadata import LinkMetadata
+from spider_core.base.link_metadata import LinkMetadata
 
 
 @dataclass
