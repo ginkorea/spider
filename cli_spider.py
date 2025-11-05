@@ -35,8 +35,12 @@ async def run_spider(spider, url, output_path, pretty):
             indent=4 if pretty else None,
         )
         f.write("\n")
-    print(f"✅ Saved result to {output_path}")
+    print("\n--- Summary ---")
+    print(spider.summarize_result(result))
+    print("----------------")
 
+    print(f"✅ Saved result to {output_path}")
+    
 
 def main():
     parser = argparse.ArgumentParser(description="LLM-powered web spider CLI.")

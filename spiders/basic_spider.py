@@ -153,3 +153,33 @@ class BasicSpider:
                 logger.warning(f"LLM scoring failed with fallback attempt: {e}")
         except Exception as e:
             logger.warning(f"LLM scoring raised an unexpected error: {e}")
+
+    def summarize_result(self, page_result):
+        """
+        Produce a concise human-readable summary of a PageResult.
+        Includes status, canonical, link count, and top LLM-scored links.
+        """
+        summary_lines = []
+        summary_lines.append(f"URL: {page_result.url}")
+        summary_lines.append(f"Status: {page_result.status}")
+        summary_lines.append(f"Canonical: {page_result.canonical or 'N/A'}")
+
+        links = getattr(page_result, "links", [])
+        chunks = getattr(page_result, "page_chunks", [])
+        summary_lines.append(f"Links found: {len(links)}")
+        summary_lines.append(f"Text chunks: {len(chunks)}")
+
+        # Optional: summarize top 3 links by LLM score
+        if links:
+            top_links = sorted(links, key=lambda l: getattr(l, "llm_score", 0.0), reverse=True)[:3]
+            summary_lines.append("Top links by LLM score:")
+            for l in top_links:
+                summary_lines.append(f"  - {l.href} ({l.llm_score:.2f}) {l.text or ''}".strip())
+
+        # Optional summary snippet of first text chunk
+        if chunks:
+            first_text = chunks[0].get("text", "")[:180].replace("\n", " ")
+            summary_lines.append(f"Sample text chunk: {first_text}...")
+
+        return "\n".join(summary_lines)
+
