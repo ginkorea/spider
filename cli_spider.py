@@ -41,7 +41,7 @@ async def run_spider(spider, url, output_path, pretty):
 def main():
     parser = argparse.ArgumentParser(description="LLM-powered web spider CLI.")
 
-    parser.add_argument("--url", required=True, help="URL to crawl")
+    parser.add_argument("url", help="URL to crawl")
     parser.add_argument("--output", default="output.jsonl", help="JSONL output file path")
     parser.add_argument("--pretty", action="store_true", help="Pretty print JSON")
     parser.add_argument("--max-tokens", type=int, default=1200, help="Max tokens per chunk")
