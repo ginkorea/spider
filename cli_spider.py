@@ -9,7 +9,7 @@ from spider_core.llm.openai_gpt_client import OpenAIGPTClient
 from spider_core.llm.relevance_ranker import RelevanceRanker
 from spider_core.spiders.basic_spider import BasicSpider
 
-# ✅ Import StealthSpider and config defaults
+# ✅ Optional stealth imports
 try:
     from spider_core.spiders.stealth.stealth_spider import StealthSpider
     from spider_core.spiders.stealth.stealth_config import (
@@ -21,8 +21,20 @@ try:
 except ImportError:
     STEALTH_AVAILABLE = False
 
+# ✅ Goal-oriented modules
+try:
+    from spider_core.goal.goal_planner import GoalPlanner
+    from spider_core.spiders.goal_spider import GoalOrientedSpider
+    from spider_core.storage.db import DB
+    GOAL_AVAILABLE = True
+except ImportError:
+    GOAL_AVAILABLE = False
 
-async def run_spider(spider, url, output_path, pretty):
+
+# -----------------------------------------------------------------------------
+# Core runner for single-page spiders
+# -----------------------------------------------------------------------------
+async def run_basic_spider(spider, url, output_path, pretty):
     print(f"🔍 Fetching: {url} using {spider.__class__.__name__} ...")
     result = await spider.fetch(url)
 
@@ -38,35 +50,99 @@ async def run_spider(spider, url, output_path, pretty):
     print("\n--- Summary ---")
     print(spider.summarize_result(result))
     print("----------------")
-
     print(f"✅ Saved result to {output_path}")
-    
 
+
+# -----------------------------------------------------------------------------
+# CLI entrypoint
+# -----------------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description="LLM-powered web spider CLI.")
+    parser = argparse.ArgumentParser(description="LLM-powered web spider CLI")
 
-    parser.add_argument("url", help="URL to crawl")
-    parser.add_argument("--output", default="output.jsonl", help="JSONL output file path")
+    # Standard arguments
+    parser.add_argument("url", help="Seed URL to crawl or fetch")
+    parser.add_argument("--output", default="output.jsonl", help="JSONL output file path (basic mode)")
     parser.add_argument("--pretty", action="store_true", help="Pretty print JSON")
     parser.add_argument("--max-tokens", type=int, default=1200, help="Max tokens per chunk")
     parser.add_argument("--no-headless", action="store_true", help="Run browser in visible mode")
 
-    # ✅ Stealth mode options
+    # Stealth mode options
     parser.add_argument("--stealth", action="store_true", help="Use StealthSpider with VPN enforcement")
     parser.add_argument("--vpn", type=str, default=None, help="VPN provider (default: nordvpn)")
-    parser.add_argument("--region", type=str, default=None, help="Region to connect VPN (e.g. hong_kong)")
-    parser.add_argument("--no-require-vpn", action="store_true", help="Do not fail if VPN is not secured")
+    parser.add_argument("--region", type=str, default=None, help="VPN region (e.g. hong_kong)")
+    parser.add_argument("--no-require-vpn", action="store_true", help="Do not fail if VPN not connected")
+
+    # Goal-driven mode options
+    parser.add_argument("--goal", type=str, default=None, help="Goal/question to answer")
+    parser.add_argument("--db", type=str, default="spider_core.db", help="SQLite database path for crawl data")
+    parser.add_argument("--max-pages", type=int, default=20, help="Max pages to visit in goal mode")
+    parser.add_argument("--confidence", type=float, default=0.85, help="Confidence threshold to stop in goal mode")
 
     args = parser.parse_args()
 
     async def async_main():
-        # Init dependencies
         browser = PlaywrightBrowserClient(headless=not args.no_headless)
         llm = OpenAIGPTClient()
         ranker = RelevanceRanker(llm)
         chunker = TextChunker(max_tokens=args.max_tokens)
 
-        # ✅ Select spider type
+        # -----------------------------------------------------------------------------
+        # GOAL MODE
+        # -----------------------------------------------------------------------------
+        if args.goal:
+            if not GOAL_AVAILABLE:
+                raise RuntimeError("Goal modules not found. Ensure goal_spider.py, goal_planner.py, and storage/db.py exist.")
+
+            print(f"[CLI] 🚀 Running Goal-Oriented Spider for goal: '{args.goal}'")
+            db = DB(args.db)
+            planner = GoalPlanner(llm)
+
+            # Determine spider base
+            if args.stealth:
+                if not STEALTH_AVAILABLE:
+                    raise RuntimeError("StealthSpider is not available. Install stealth module.")
+                vpn_provider = args.vpn or DEFAULT_VPN_PROVIDER
+                region = args.region or DEFAULT_REGION
+                require_vpn = not args.no_require_vpn
+                print(f"[CLI] Using StealthSpider VPN={vpn_provider}, region={region}, require_vpn={require_vpn}")
+                base_spider = StealthSpider(
+                    browser_client=browser,
+                    relevance_ranker=ranker,
+                    chunker=chunker,
+                    vpn_provider=vpn_provider,
+                    region=region,
+                    require_vpn=require_vpn,
+                )
+            else:
+                base_spider = BasicSpider(browser, ranker, chunker)
+
+            goal_spider = GoalOrientedSpider(
+                browser_client=browser,
+                relevance_ranker=ranker,
+                chunker=chunker,
+                planner=planner,
+                db=db,
+                stop_threshold=args.confidence,
+                max_pages=args.max_pages,
+            )
+
+            try:
+                result = await goal_spider.fetch_goal(args.url, args.goal)
+                print("\n=== GOAL RESULT ===")
+                print(f"Goal: {result['goal']}")
+                print(f"Confidence: {result['confidence']:.2f}")
+                print(f"Visited pages: {result['visited_count']}")
+                print("\nAnswer:")
+                print(result["answer"][:2000], "..." if len(result["answer"]) > 2000 else "", sep="")
+                print("===================")
+            finally:
+                await browser.close()
+                db.close()
+            return
+
+        # -----------------------------------------------------------------------------
+        # BASIC OR STEALTH MODE
+        # -----------------------------------------------------------------------------
         if args.stealth:
             if not STEALTH_AVAILABLE:
                 raise RuntimeError("StealthSpider is not available. Ensure stealth module is installed.")
@@ -74,7 +150,6 @@ def main():
             vpn_provider = args.vpn or DEFAULT_VPN_PROVIDER
             region = args.region or DEFAULT_REGION
             require_vpn = not args.no_require_vpn
-
             print(f"[CLI] Using StealthSpider with VPN={vpn_provider}, region={region}, require_vpn={require_vpn}")
             spider = StealthSpider(
                 browser_client=browser,
@@ -85,16 +160,14 @@ def main():
                 require_vpn=require_vpn,
             )
         else:
-            print("[CLI] Using BasicSpider (no VPN enforcement).")
+            print("[CLI] Using BasicSpider (no VPN).")
             spider = BasicSpider(browser, ranker, chunker)
 
         try:
-            await run_spider(spider, args.url, Path(args.output), args.pretty)
+            await run_basic_spider(spider, args.url, Path(args.output), args.pretty)
         finally:
-            # ✅ Ensures browser always closes on SAME event loop
             await browser.close()
 
-    # ✅ Run within ONE consistent event loop
     asyncio.run(async_main())
 
 
