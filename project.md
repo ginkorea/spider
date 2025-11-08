@@ -6,13 +6,15 @@
 |:--|:--|
 | Root Directory | `/home/gompert/data/workspace/spider_core` |
 | Total Directories | 10 |
-| Total Indexed Files | 37 |
+| Total Indexed Files | 39 |
 | Skipped Files | 0 |
-| Indexed Size | 58.12 KB |
+| Indexed Size | 79.99 KB |
 | Max File Size Limit | 2 MB |
 
 ## 📚 Table of Contents
 
+- [.__init__.py.swp](#init-py-swp)
+- [README.md](#readme-md)
 - [__init__.py](#init-py)
 - [base/__init__.py](#base-init-py)
 - [base/link_metadata.py](#base-link-metadata-py)
@@ -40,8 +42,8 @@
 - [spiders/goal_spider.py](#spiders-goal-spider-py)
 - [spiders/stealth/__init__.py](#spiders-stealth-init-py)
 - [spiders/stealth/stealth_config.py](#spiders-stealth-stealth-config-py)
-- [spiders/stealth/stealth_spider.py](#spiders-stealth-stealth-spider-py)
 - [spiders/stealth/vpn_manager.py](#spiders-stealth-vpn-manager-py)
+- [spiders/stealth_spider.py](#spiders-stealth-spider-py)
 - [storage/__init__.py](#storage-init-py)
 - [storage/db.py](#storage-db-py)
 - [test/test.py](#test-test-py)
@@ -83,11 +85,11 @@
     📁 stealth/
         📄 __init__.py
         📄 stealth_config.py
-        📄 stealth_spider.py
         📄 vpn_manager.py
     📄 __init__.py
     📄 basic_spider.py
     📄 goal_spider.py
+    📄 stealth_spider.py
 📁 storage/
     📄 __init__.py
     📄 db.py
@@ -100,29 +102,215 @@
     📄 test_spider.py
 📄 __init__.py
 📄 cli_spider.py
+📄 README.md
 📄 requirements.txt
+```
+
+## `README.md`
+
+```markdown
+# 🕷️ go-spider
+
+**go-spider** is an LLM-driven, goal-oriented web crawler designed for autonomous information discovery.  
+It combines browser-based rendering, intelligent link prioritization, and language-model reasoning to search the web until it achieves a defined goal — not just until it runs out of links.
+
+---
+
+## 🚀 Key Features
+
+- **🎯 Goal-Oriented Crawling** – Specify a goal or question (e.g. “Find this company’s investor relations contact”) and let go-spider autonomously explore until it finds a confident answer.
+- **🧠 LLM-Powered Relevance Ranking** – Uses a local or cloud-based LLM to score link and content relevance dynamically.
+- **🕵️ Stealth Mode (Optional)** – Integrates with VPNs for geo-specific or anonymized browsing.
+- **📚 Persistent Memory** – Optionally logs pages and embeddings for later retrieval-augmented generation (RAG) search.
+- **🌐 Playwright Rendering** – Fetches fully rendered pages (JS, AJAX, etc.) to ensure accurate content capture.
+- **⚙️ Modular Architecture** – Swap in your own LLM client, browser backend, or vector DB.
+
+---
+
+## 🧩 Installation
+
+Install directly from PyPI:
+
+```bash
+pip install go-spider
+````
+
+To run locally with development dependencies:
+
+```bash
+git clone https://github.com/YOUR_GITHUB_USERNAME/go-spider.git
+cd go-spider
+pip install -e .
+```
+
+---
+
+## 🕹️ Basic Usage
+
+### Crawl a single site
+
+```bash
+spider "https://example.com"
+```
+
+### Goal-Oriented Crawl
+
+```bash
+spider "https://example.com" \
+  --goal "Find this site's investor relations email" \
+  --max-pages 25 \
+  --confidence 0.9
+```
+
+Example output:
+
+```
+[CLI] 🚀 Running Goal Spider for goal: 'Find this site's investor relations email'
+[BasicSpider] INFO Rendering URL: https://example.com
+[BasicSpider] INFO Rendering URL: https://iana.org/domains/example
+[BasicSpider] INFO Rendering URL: https://iana.org/contact
+
+=== GOAL RESULT ===
+Goal: Find this site's investor relations email
+Confidence: 1.00
+Visited pages: 3
+Answer:
+No contact email found.
+The page does not provide a direct contact email, but includes: iana@iana.org
+===================
+```
+
+---
+
+## ⚙️ Command-Line Options
+
+| Flag            | Description                                    |
+| --------------- | ---------------------------------------------- |
+| `--goal`        | Question or target objective for the crawl     |
+| `--stealth`     | Use VPN-protected stealth browsing             |
+| `--region`      | VPN region (e.g. `hong_kong`)                  |
+| `--db`          | SQLite database path for persistent crawl logs |
+| `--max-pages`   | Maximum number of pages to visit               |
+| `--confidence`  | Confidence threshold to stop searching         |
+| `--pretty`      | Pretty-print output JSON                       |
+| `--no-headless` | Run Playwright browser visibly                 |
+| `--output`      | Output path (default: `output.jsonl`)          |
+
+---
+
+## 🧠 Architecture Overview
+
+```text
+PlaywrightBrowserClient  →  BasicSpider / StealthSpider / GoalSpider
+                                    ↓
+                         RelevanceRanker (LLM-based)
+                                    ↓
+                               TextChunker
+                                    ↓
+                              Goal Planner
+                                    ↓
+                             SQLite + Embeddings
+```
+
+* **BasicSpider** – standard site fetcher
+* **StealthSpider** – uses VPN-enforced browsing
+* **GoalSpider** – iterative goal-driven crawler (core of go-spider)
+
+---
+
+## 🧩 Integration Example (Python API)
+
+You can also use it as a library:
+
+```python
+from spider_core.spiders.goal_spider import GoalSpider
+from spider_core.browser.playwright_client import PlaywrightBrowserClient
+from spider_core.llm.openai_gpt_client import OpenAIGPTClient
+from spider_core.llm.relevance_ranker import RelevanceRanker
+from spider_core.core_utils.chunking import TextChunker
+import asyncio
+
+async def main():
+    browser = PlaywrightBrowserClient()
+    llm = OpenAIGPTClient()
+    ranker = RelevanceRanker(llm)
+    chunker = TextChunker()
+
+    spider = GoalSpider(browser_client=browser, relevance_ranker=ranker, chunker=chunker, llm_client=llm)
+    result = await spider.run_goal("https://example.com", "Find contact email")
+    print(result)
+
+asyncio.run(main())
+```
+
+---
+
+## 🧰 Requirements
+
+* Python 3.10+
+* Playwright
+* OpenAI-compatible LLM API key (optional)
+* Works on Linux, macOS, and Windows (with Playwright browsers installed)
+
+---
+
+## 🏗️ Roadmap
+
+* [ ] Add distributed crawling support
+* [ ] Integrate local LLMs via `llama.cpp`
+* [ ] Add vector DB backends (FAISS / Chroma / SQLite-VSS)
+* [ ] Fine-grained crawl policies (robots.txt, depth weighting)
+* [ ] RAG API for querying past crawls
+
+---
+
+## 🧑‍💻 Author
+
+**Josh Gompert**
+AI Systems Engineer • Data Scientist • Information Operations Officer
+
+* GitHub: [@ginkorea](https://github.com/ginkorea)
+* PyPI: [go-spider](https://pypi.org/project/go-spider/)
+
+---
+
+## 🪪 License
+
+**MIT License** — free to use, modify, and distribute.
+See `LICENSE` file for details.
+
+---
+
+> *“go-spider doesn’t just crawl the web — it pursues intent.”*
+
 ```
 
 ## `__init__.py`
 
 ```python
 """
-Spider implementations: basic, stealth, and goal-oriented variants.
+spider_core
+-----------
+Main package for the goal-oriented LLM web spider system.
 """
-from spider_core.spiders.basic_spider import BasicSpider
-from spider_core.spiders.stealth.stealth_spider import StealthSpider
-try:
-    from spider_core.spiders.goal_spider import GoalOrientedSpider
-except ImportError:
-    GoalOrientedSpider = None
-
-__all__ = ["BasicSpider", "StealthSpider", "GoalOrientedSpider"]
+__all__ = ["spiders", "browser", "goal", "llm", "storage", "base", "core_utils", "extractors"]
 
 ```
 
 ## `base/__init__.py`
 
 ```python
+"""
+spider_core.base
+----------------
+Base interfaces and data models used by all spiders.
+"""
+
+from spider_core.base.spider import Spider
+from spider_core.base.page_result import PageResult
+from spider_core.base.link_metadata import LinkMetadata
+
+__all__ = ["Spider", "PageResult", "LinkMetadata"]
 
 ```
 
@@ -172,20 +360,16 @@ class PageResult:
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
-
 class Spider(ABC):
     """
-    Abstract base class for spiders.
-    Defines a contract for fetching and enriching a web page.
+    Abstract base spider contract.
+    All spiders must implement `fetch()` that returns a structured PageResult.
     """
 
     @abstractmethod
     async def fetch(self, url: str) -> Dict[str, Any]:
-        """
-        Fetch a URL, process it (deterministic extraction + LLM enrichment),
-        and return a structured dict or PageResult.
-        """
-        pass
+        """Fetch a URL and return structured data (PageResult)."""
+        raise NotImplementedError("All spiders must implement fetch()")
 
 ```
 
@@ -319,9 +503,8 @@ except ImportError:
 # Optional goal-oriented imports
 # ---------------------------------------------------------------------
 try:
-    from spider_core.spiders.goal_spider import GoalOrientedSpider
-    from spider_core.goal.goal_planner import GoalPlanner
-    from spider_core.storage.db import DB
+    # NOTE: your module currently defines GoalSpider, not GoalOrientedSpider
+    from spider_core.spiders.goal_spider import GoalSpider
     GOAL_AVAILABLE = True
 except ImportError:
     GOAL_AVAILABLE = False
@@ -371,10 +554,11 @@ def main():
 
     # Goal-oriented mode arguments
     parser.add_argument("--goal", type=str, default=None, help="Goal or question to recursively answer")
-    parser.add_argument("--db", type=str, default="spider_core.db", help="SQLite DB path for crawl data (goal mode)")
-    parser.add_argument("--max-pages", type=int, default=25, help="Max pages to crawl in goal mode")
-    parser.add_argument("--confidence", type=float, default=0.85, help="Confidence threshold to stop goal mode")
     parser.add_argument("--max-depth", type=int, default=3, help="Maximum recursion depth for goal mode")
+    # keep these args for future; currently not used by GoalSpider, but harmless:
+    parser.add_argument("--db", type=str, default="spider_core.db", help="(Reserved) SQLite DB path for future use")
+    parser.add_argument("--max-pages", type=int, default=25, help="(Reserved) Max pages to crawl in goal mode")
+    parser.add_argument("--confidence", type=float, default=0.85, help="(Reserved) Confidence threshold for goal mode")
 
     args = parser.parse_args()
 
@@ -392,13 +576,12 @@ def main():
         # -----------------------------------------------------------------
         if args.goal:
             if not GOAL_AVAILABLE:
-                raise RuntimeError("Goal modules not found. Ensure goal_spider.py, goal_planner.py, and storage/db.py exist.")
+                raise RuntimeError("Goal modules not found. Ensure spiders/goal_spider.py exists and is importable.")
 
-            print(f"[CLI] 🚀 Running Goal-Oriented Spider for goal: '{args.goal}'")
-            db = DB(args.db)
-            planner = GoalPlanner(llm)
+            print(f"[CLI] 🚀 Running Goal Spider for goal: '{args.goal}'")
 
-            # Choose base spider (stealth or normal)
+            # Choose base spider (stealth or normal) just for behavior parity;
+            # GoalSpider itself will handle recursive crawling.
             if args.stealth:
                 if not STEALTH_AVAILABLE:
                     raise RuntimeError("StealthSpider not available. Install stealth module.")
@@ -414,33 +597,31 @@ def main():
                     region=region,
                     require_vpn=require_vpn,
                 )
+                # We don't actually *use* base_spider inside GoalSpider yet, but you can wire it in later.
             else:
                 base_spider = BasicSpider(browser, ranker, chunker)
 
-            # Initialize the goal-oriented spider
-            goal_spider = GoalOrientedSpider(
+            # Initialize the goal spider (uses llm directly)
+            goal_spider = GoalSpider(
                 browser_client=browser,
                 relevance_ranker=ranker,
                 chunker=chunker,
-                planner=planner,
-                db=db,
-                stop_threshold=args.confidence,
-                max_pages=args.max_pages,
+                llm_client=llm,
                 max_depth=args.max_depth,
             )
 
             try:
-                result = await goal_spider.fetch_goal(args.url, args.goal)
+                result = await goal_spider.run_goal(args.url, args.goal)
                 print("\n=== GOAL RESULT ===")
                 print(f"Goal: {result['goal']}")
+                print(f"Found: {result['found']}")
                 print(f"Confidence: {result['confidence']:.2f}")
-                print(f"Visited pages: {result['visited_count']}")
+                print(f"Visited pages: {result['visited_pages']}")
                 print("\nAnswer:")
-                print(result['answer'][:2000], "..." if len(result['answer']) > 2000 else "", sep="")
+                print(result["answer"] or "(no answer found)")
                 print("===================")
             finally:
                 await browser.close()
-                db.close()
             return
 
         # -----------------------------------------------------------------
@@ -481,6 +662,16 @@ if __name__ == "__main__":
 ## `core_utils/__init__.py`
 
 ```python
+"""
+spider_core.core_utils
+----------------------
+Utility functions for URL normalization, chunking, and tokenization.
+"""
+
+from spider_core.core_utils.chunking import TextChunker
+from spider_core.core_utils.url_utils import canonicalize_url
+
+__all__ = ["TextChunker", "canonicalize_url"]
 
 ```
 
@@ -610,6 +801,15 @@ def canonicalize_url(href: str, base_url: str) -> str | None:
 ## `extractors/__init__.py`
 
 ```python
+"""
+spider_core.extractors
+----------------------
+HTML content and link extraction modules.
+"""
+
+from spider_core.extractors.deterministic_extractor import DeterministicLinkExtractor
+
+__all__ = ["DeterministicLinkExtractor"]
 
 ```
 
@@ -690,8 +890,11 @@ class DeterministicLinkExtractor:
 
 ```python
 """
-Goal module: handles goal-driven reasoning and planning for the spider.
+spider_core.goal
+----------------
+Goal planner for reasoning, retrieval, and LLM guidance.
 """
+
 from spider_core.goal.goal_planner import GoalPlanner
 
 __all__ = ["GoalPlanner"]
@@ -702,48 +905,229 @@ __all__ = ["GoalPlanner"]
 
 ```python
 # goal/goal_planner.py
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from spider_core.llm.openai_gpt_client import OpenAIGPTClient
 
-GOAL_SYSTEM = (
-  "You are a goal-driven web research planner. "
-  "Given a user GOAL and a PAGE CHUNK, you will: "
-  "1) estimate if the GOAL is fully answered by this page content (0-1), "
-  "2) extract a concise answer delta (new facts that progress the goal), "
-  "3) propose next links (subset of candidates) most likely to progress the goal."
+# ---------------------------------------------------------------------
+# System prompts
+# ---------------------------------------------------------------------
+
+GOAL_CHUNK_SYSTEM = (
+    "You are a goal-driven web research planner. "
+    "Given a user GOAL and a PAGE CHUNK, you will: "
+    "1) estimate if the GOAL is fully answered by this page content (0-1), "
+    "2) extract a concise answer delta (new facts that progress the goal), "
+    "3) propose next links (subset of candidates) most likely to progress the goal.\n\n"
+    "Return ONLY valid JSON with keys:\n"
+    "{"
+    '  "goal_satisfaction_estimate": float (0..1),'
+    '  "answer_delta": "short string",'
+    '  "next_link_scores": [{"href": "...", "score": float (0..1)}]'
+    "}"
 )
 
-def build_user_prompt(goal: str, chunk_text: str, link_candidates: List[Dict[str, str]]) -> str:
+GOAL_CONTEXT_SYSTEM = (
+    "You are an evaluator for a goal-oriented web crawler.\n"
+    "Your job is to decide whether the user's GOAL has been answered by the given CONTEXT.\n\n"
+    "Rules:\n"
+    "- Be strict but pragmatic: if the context clearly contains the answer, mark found=true.\n"
+    "- 'confidence' is a float between 0 and 1 expressing how sure you are that the GOAL is satisfied.\n"
+    "- 'answer' should be a short, direct answer in natural language, using only information from CONTEXT.\n\n"
+    "Return ONLY valid JSON with keys:\n"
+    "{"
+    '  "found": bool,'
+    '  "confidence": float (0..1),'
+    '  "answer": "short string"'
+    "}"
+)
+
+LINK_PLANNER_SYSTEM = (
+    "You are a navigation planner for a generic goal-oriented web crawler.\n"
+    "Given a GOAL, the CURRENT PAGE URL, a PAGE SNIPPET, the current CONFIDENCE, and a list of CANDIDATE LINKS, "
+    "you will assign each link a score from 0.0 to 1.0 indicating how promising it is for making progress "
+    "toward the GOAL.\n\n"
+    "You must handle arbitrary goals (not just contact info): product questions, policies, biographies, etc.\n"
+    "Prefer links that:\n"
+    "- are semantically related to the GOAL based on their anchor text and href,\n"
+    "- look like high-level information or overview pages when the GOAL is broad,\n"
+    "- look like specific detail pages (FAQ, docs, terms, policies, etc.) when the GOAL is narrow.\n\n"
+    "Return ONLY valid JSON of the form:\n"
+    "{"
+    '  "link_scores": ['
+    '    {"href": "https://example.com/path", "score": 0.0},'
+    '    ...'
+    "  ]"
+    "}"
+)
+
+
+def build_chunk_prompt(goal: str, chunk_text: str, link_candidates: List[Dict[str, str]]) -> str:
     return (
         f"GOAL:\n{goal}\n\n"
-        f"PAGE CHUNK:\n{chunk_text[:4000]}\n\n"
-        f"LINK CANDIDATES (href + text):\n{[{'href': l['href'], 'text': l.get('text','')} for l in link_candidates]}\n\n"
-        "Return JSON: {"
-        '"goal_satisfaction_estimate": 0..1, '
-        '"answer_delta": "short text", '
-        '"next_link_scores": [{"href":"...","score":0..1}]'
-        "}"
+        f"PAGE CHUNK (truncated):\n{chunk_text[:4000]}\n\n"
+        f"LINK CANDIDATES (href + text):\n"
+        f"{[{'href': l['href'], 'text': l.get('text', '')[:200]} for l in link_candidates]}\n\n"
+        "Return JSON as described."
     )
 
+
 class GoalPlanner:
+    """
+    High-level planner for goal-oriented crawling.
+
+    Responsibilities:
+      - Evaluate whether a given CONTEXT (RAG-retrieved text) satisfies the GOAL.
+      - Score links on a page according to how promising they are for the GOAL.
+      - (Legacy) evaluate individual chunks for goal satisfaction and per-link scores.
+    """
+
     def __init__(self, llm: OpenAIGPTClient):
         self.llm = llm
 
-    async def evaluate_chunk(self, goal: str, chunk_text: str, link_candidates: List[Dict[str, Any]]):
-        prompt = build_user_prompt(goal, chunk_text, link_candidates)
-        out = await self.llm.complete_json(GOAL_SYSTEM, prompt)
-        # normalize
+    # ------------------------------------------------------------------
+    # Legacy / chunk-based interface (kept for compatibility)
+    # ------------------------------------------------------------------
+    async def evaluate_chunk(
+        self,
+        goal: str,
+        chunk_text: str,
+        link_candidates: List[Dict[str, Any]],
+    ) -> Tuple[float, str, Dict[str, float]]:
+        """
+        Evaluate a single PAGE CHUNK relative to GOAL.
+
+        Returns:
+          - goal_satisfaction_estimate (0..1)
+          - answer_delta (short string)
+          - next_link_scores: {href -> score}
+        """
+        prompt = build_chunk_prompt(goal, chunk_text, link_candidates)
+        out = await self.llm.complete_json(GOAL_CHUNK_SYSTEM, prompt)
+
         est = float(out.get("goal_satisfaction_estimate", 0.0))
         delta = out.get("answer_delta", "").strip()
-        next_scores = out.get("next_link_scores", [])
-        scored = {x["href"]: float(x.get("score", 0.0)) for x in next_scores if "href" in x}
+        next_scores_raw = out.get("next_link_scores", []) or []
+        scored = {}
+        for x in next_scores_raw:
+            href = x.get("href")
+            if not href:
+                continue
+            try:
+                s = float(x.get("score", 0.0))
+            except (TypeError, ValueError):
+                s = 0.0
+            scored[href] = s
+
         return est, delta, scored
+
+    # ------------------------------------------------------------------
+    # NEW: Context-level goal evaluation (RAG)
+    # ------------------------------------------------------------------
+    async def evaluate_context(self, goal: str, context_text: str) -> Tuple[bool, float, str]:
+        """
+        Given a GOAL and aggregated CONTEXT (e.g. top-k retrieved chunks),
+        decide whether the GOAL is satisfied.
+
+        Returns:
+          - found: bool
+          - confidence: float (0..1)
+          - answer: short string
+        """
+        # Don't waste tokens if there's no context at all
+        if not context_text.strip():
+            return False, 0.0, ""
+
+        prompt = (
+            f"GOAL:\n{goal}\n\n"
+            f"CONTEXT (truncated if long):\n{context_text[:8000]}"
+        )
+
+        out = await self.llm.complete_json(GOAL_CONTEXT_SYSTEM, prompt)
+        found = bool(out.get("found", False))
+        try:
+            confidence = float(out.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        answer = out.get("answer", "").strip()
+
+        return found, confidence, answer
+
+    # ------------------------------------------------------------------
+    # NEW: Generic, goal-aware link scoring
+    # ------------------------------------------------------------------
+    async def score_links(
+        self,
+        goal: str,
+        page_url: str,
+        page_snippet: str,
+        link_candidates: List[Dict[str, str]],
+        current_confidence: float,
+        max_links: int = 50,
+    ) -> Dict[str, float]:
+        """
+        Score candidate links for their usefulness toward achieving GOAL.
+
+        link_candidates: list of dicts with keys "href", "text".
+        Returns: {href -> score (0..1)}.
+        """
+        if not link_candidates:
+            return {}
+
+        # truncate to keep token usage sane
+        trimmed = link_candidates[:max_links]
+        page_snippet = (page_snippet or "")[:1500]
+
+        user_prompt = (
+            f"GOAL:\n{goal}\n\n"
+            f"CURRENT CONFIDENCE:\n{current_confidence}\n\n"
+            f"CURRENT PAGE URL:\n{page_url}\n\n"
+            f"PAGE SNIPPET:\n{page_snippet}\n\n"
+            f"CANDIDATE LINKS (href + text):\n"
+            f"{[{'href': l.get('href'), 'text': (l.get('text') or '')[:200]} for l in trimmed]}\n\n"
+            "Assign each link a 'score' from 0.0 to 1.0 indicating how promising it is for making progress "
+            "toward the GOAL. You may give 0.0 to clearly irrelevant links."
+        )
+
+        try:
+            out = await self.llm.complete_json(LINK_PLANNER_SYSTEM, user_prompt)
+        except Exception:
+            # Fail safe: no goal-aware scores
+            return {}
+
+        scores: Dict[str, float] = {}
+        for item in out.get("link_scores", []) or []:
+            href = item.get("href")
+            if not href:
+                continue
+            try:
+                s = float(item.get("score", 0.0))
+            except (TypeError, ValueError):
+                s = 0.0
+            scores[href] = s
+
+        return scores
 
 ```
 
 ## `llm/__init__.py`
 
 ```python
+"""
+spider_core.llm
+---------------
+LLM-related clients and utilities (OpenAI, embeddings, ranking).
+"""
+
+from spider_core.llm.openai_gpt_client import OpenAIGPTClient
+from spider_core.llm.relevance_ranker import RelevanceRanker
+from spider_core.llm.embeddings_client import OpenAIEmbeddings, EmbeddingsClient
+
+__all__ = [
+    "OpenAIGPTClient",
+    "RelevanceRanker",
+    "OpenAIEmbeddings",
+    "EmbeddingsClient",
+]
 
 ```
 
@@ -965,6 +1349,17 @@ tiktoken>=0.6.0
 ## `spiders/__init__.py`
 
 ```python
+"""
+spider_core.spiders
+-------------------
+All spider implementations (Basic, Stealth, Goal).
+"""
+
+from spider_core.spiders.basic_spider import BasicSpider
+from spider_core.spiders.stealth_spider import StealthSpider
+from spider_core.spiders.goal_spider import GoalSpider
+
+__all__ = ["BasicSpider", "StealthSpider", "GoalSpider"]
 
 ```
 
@@ -975,7 +1370,7 @@ import asyncio
 import logging
 from datetime import datetime
 from typing import List
-
+from spider_core.base.spider import Spider
 from spider_core.base.page_result import PageResult
 from spider_core.browser.browser_client import BrowserClient
 from spider_core.extractors.deterministic_extractor import DeterministicLinkExtractor
@@ -983,11 +1378,11 @@ from spider_core.core_utils.chunking import TextChunker
 from spider_core.llm.relevance_ranker import RelevanceRanker
 from spider_core.base.link_metadata import LinkMetadata
 
-logger = logging.getLogger("basic_spider")
+logger = logging.getLogger("BasicSpider")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
     ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter("[BasicSpider] %(levelname)s %(message)s"))
+    ch.setFormatter(logging.Formatter("[BasicSpider] %(message)s"))
     logger.addHandler(ch)
 
 
@@ -997,42 +1392,27 @@ async def maybe_await(result):
     return result
 
 
-class BasicSpider:
+class BasicSpider(Spider):
     """
-    BasicSpider: orchestrates render -> extract -> chunk -> score (LLM)
-    - split into two main building blocks:
-        * _fetch_without_llm: render, extract, chunk, build PageResult (no LLM calls)
-        * _score_links_with_llm: calls the ranker to score/update links (LLM calls)
-    This split allows StealthSpider to call _fetch_without_llm while the
-    machine is routed through VPN, then disconnect before _score_links_with_llm.
+    Handles the deterministic pipeline:
+    render → extract → chunk → (optional) LLM scoring
     """
 
-    def __init__(
-        self,
-        browser_client: BrowserClient,
-        relevance_ranker: RelevanceRanker,
-        chunker: TextChunker,
-    ):
+    def __init__(self, browser_client: BrowserClient, relevance_ranker: RelevanceRanker, chunker: TextChunker):
         self.browser_client = browser_client
         self.relevance_ranker = relevance_ranker
         self.chunker = chunker
 
     async def fetch(self, url: str) -> PageResult:
-        """
-        Full pipeline: render -> extract/chunk -> (LLM scoring) -> return PageResult
-        """
         logger.info(f"Starting fetch pipeline for: {url}")
-        # 1) render + extract + chunk (without calling LLM)
         page_result = await self._fetch_without_llm(url)
 
-        # 2) if we have chunks and a ranker, run scoring (LLM)
         if page_result.page_chunks and self.relevance_ranker:
             try:
                 await self._score_links_with_llm(page_result)
             except Exception as e:
                 logger.warning(f"LLM scoring failed: {e}")
 
-        # 3) finalize canonical if missing
         if not page_result.canonical:
             canonical = next((l.href for l in page_result.links if "canonical" in (l.rel or [])), page_result.url)
             page_result.canonical = canonical
@@ -1041,46 +1421,14 @@ class BasicSpider:
         return page_result
 
     async def _fetch_without_llm(self, url: str) -> PageResult:
-        """
-        Render the page, extract deterministic links, chunk visible text, and
-        return a PageResult WITHOUT doing any LLM calls.
-        """
-        logger.info(f"Rendering URL: {url}")
         html, visible_text, status = await self.browser_client.render(url)
-
-        logger.debug(f"Render complete (status={status}), extracting links")
-        # Deterministic extractor is implemented as a function/classmethod that expects html + base_url
+        links: List[LinkMetadata] = []
         try:
-            links: List[LinkMetadata] = DeterministicLinkExtractor.extract(html, url)
-        except TypeError:
-            # fallbacks for other extractor signatures
-            try:
-                links = DeterministicLinkExtractor().extract(html, url)
-            except Exception as e:
-                logger.warning(f"Deterministic extractor failed: {e}; falling back to empty link list")
-                links = []
-
-        logger.debug(f"Extracted {len(links)} links")
-
-        # Chunk the visible text. Accept multiple method names for compatibility.
-        logger.debug("Chunking visible text")
-        chunks = None
-        try:
-            chunks = self.chunker.chunk_text(visible_text)
-        except Exception:
-            try:
-                chunks = list(self.chunker.chunk(visible_text))
-            except Exception:
-                try:
-                    chunks = self.chunker.chunking(visible_text)
-                except Exception as e:
-                    logger.warning(f"Chunker failed: {e}; using single-chunk fallback")
-                    chunks = [{"chunk_id": 0, "text": visible_text or "", "token_count": len((visible_text or "").split())}]
-
-        logger.debug(f"Produced {len(chunks)} chunks")
-
-        # Build PageResult
-        page_result = PageResult(
+            links = DeterministicLinkExtractor.extract(html, url)
+        except Exception as e:
+            logger.warning(f"Deterministic extractor failed: {e}")
+        chunks = self.chunker.chunk_text(visible_text)
+        return PageResult(
             url=url,
             fetched_at=datetime.utcnow(),
             status=status,
@@ -1089,88 +1437,40 @@ class BasicSpider:
             llm_summary=None,
             page_chunks=chunks,
         )
-        return page_result
 
     async def _score_links_with_llm(self, page_result: PageResult):
-        """
-        Use the relevance_ranker to score links and optionally produce summaries.
-        This method assumes the environment's network identity is the one the LLM
-        should see (i.e., called after VPN is disconnected in StealthSpider).
-        """
         logger.info("Scoring links with LLM...")
         rr = self.relevance_ranker
-
-        # prefer common method names
-        method = None
-        for name in ("score_links", "rank_links", "rank", "score"):
-            if hasattr(rr, name):
-                method = getattr(rr, name)
-                break
-
-        if method is None:
-            logger.warning("No scoring method found on relevance_ranker; skipping LLM scoring.")
+        method = next((getattr(rr, n) for n in ("score_links", "rank_links", "rank", "score") if hasattr(rr, n)), None)
+        if not method:
             return
+        res = method(page_result.links, page_result.page_chunks)
+        await maybe_await(res)
+        logger.info("LLM scoring completed.")
 
-        # Call the ranker with (links, chunks) if possible
-        try:
-            res = method(page_result.links, page_result.page_chunks)
-            await maybe_await(res)
-            logger.debug("LLM scoring completed and may have mutated page_result.links in-place.")
-        except TypeError:
-            # fallback: maybe the ranker expects a different signature (links only)
-            try:
-                res = method(page_result.links)
-                await maybe_await(res)
-                logger.debug("LLM scoring completed with fallback signature.")
-            except Exception as e:
-                logger.warning(f"LLM scoring failed with fallback attempt: {e}")
-        except Exception as e:
-            logger.warning(f"LLM scoring raised an unexpected error: {e}")
-
-    def summarize_result(self, page_result):
-        """
-        Produce a concise human-readable summary of a PageResult.
-        Includes status, canonical, link count, and top LLM-scored links.
-        """
-        summary_lines = []
-        summary_lines.append(f"URL: {page_result.url}")
-        summary_lines.append(f"Status: {page_result.status}")
-        summary_lines.append(f"Canonical: {page_result.canonical or 'N/A'}")
-
-        links = getattr(page_result, "links", [])
-        chunks = getattr(page_result, "page_chunks", [])
-        summary_lines.append(f"Links found: {len(links)}")
-        summary_lines.append(f"Text chunks: {len(chunks)}")
-
-        # Optional: summarize top 3 links by LLM score
-        if links:
-            top_links = sorted(links, key=lambda l: getattr(l, "llm_score", 0.0), reverse=True)[:3]
-            summary_lines.append("Top links by LLM score:")
-            for l in top_links:
-                summary_lines.append(f"  - {l.href} ({l.llm_score:.2f}) {l.text or ''}".strip())
-
-        # Optional summary snippet of first text chunk
-        if chunks:
-            first_text = chunks[0].get("text", "")[:180].replace("\n", " ")
-            summary_lines.append(f"Sample text chunk: {first_text}...")
-
-        return "\n".join(summary_lines)
-
+    def summarize_result(self, page_result: PageResult) -> str:
+        return (
+            f"URL: {page_result.url}\n"
+            f"Status: {page_result.status}\n"
+            f"Links found: {len(page_result.links)}\n"
+            f"Text chunks: {len(page_result.page_chunks)}\n"
+        )
 
 ```
 
 ## `spiders/goal_spider.py`
 
 ```python
-import asyncio
+import heapq
 import logging
-from typing import Set, List, Dict, Optional
-from datetime import datetime
+from typing import Dict, List, Optional, Set, Tuple
 from spider_core.spiders.basic_spider import BasicSpider
 from spider_core.base.page_result import PageResult
-from spider_core.base.link_metadata import LinkMetadata
+from spider_core.storage.db import DB
+from spider_core.goal.goal_planner import GoalPlanner
+from spider_core.llm.embeddings_client import EmbeddingsClient, OpenAIEmbeddings
 
-logger = logging.getLogger("goal_spider")
+logger = logging.getLogger("GoalSpider")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
     ch = logging.StreamHandler()
@@ -1179,72 +1479,98 @@ if not logger.handlers:
 
 
 class GoalSpider(BasicSpider):
-    """
-    GoalSpider recursively crawls pages until the given goal is achieved.
-    Example goal: 'Find contact email'
-    """
+    """RAG-augmented spider that reasons toward an arbitrary goal."""
 
-    def __init__(self, browser_client, relevance_ranker, chunker, llm_client, max_depth: int = 3):
+    def __init__(
+        self,
+        browser_client,
+        relevance_ranker,
+        chunker,
+        llm_client,
+        db: Optional[DB] = None,
+        planner: Optional[GoalPlanner] = None,
+        embedder: Optional[EmbeddingsClient] = None,
+        embed_model: str = "text-embedding-3-small",
+        max_depth: int = 3,
+        stop_threshold: float = 0.9,
+        max_pages: int = 25,
+        retrieval_top_k: int = 8,
+    ):
         super().__init__(browser_client, relevance_ranker, chunker)
-        self.llm_client = llm_client
+        self.llm = llm_client
+        self.db = db or DB()
+        self.planner = planner or GoalPlanner(self.llm)
+        self.embed_model = embed_model
+        self.embedder = embedder or OpenAIEmbeddings(model=embed_model)
         self.max_depth = max_depth
+        self.stop_threshold = stop_threshold
+        self.max_pages = max_pages
+        self.retrieval_top_k = retrieval_top_k
         self.visited: Set[str] = set()
-        self.goal_result: Optional[str] = None
-        self.confidence: float = 0.0
 
-    async def _check_goal(self, page: PageResult, goal: str) -> Dict:
-        """Ask the LLM if the goal is satisfied on this page."""
-        system_prompt = (
-            "You are a goal evaluator for a web crawler. "
-            "Given a user goal and a web page's text content, "
-            "determine if the goal has been achieved. "
-            "Return JSON with keys: {'found': bool, 'confidence': float, 'answer': str}."
-        )
-        user_prompt = f"GOAL: {goal}\n\nPAGE TEXT:\n{page.page_chunks[0]['text'][:4000] if page.page_chunks else ''}"
-        try:
-            response = await self.llm_client.complete_json(system_prompt, user_prompt)
-            return response
-        except Exception as e:
-            logger.warning(f"Goal check failed: {e}")
-            return {"found": False, "confidence": 0.0, "answer": ""}
-
-    async def crawl_until_goal(self, start_url: str, goal: str, depth: int = 0) -> Optional[PageResult]:
-        """Recursive crawler that continues until goal found or depth exhausted."""
-        if depth > self.max_depth:
-            return None
-        if start_url in self.visited:
-            return None
-        self.visited.add(start_url)
-
-        logger.info(f"[Depth {depth}] Crawling: {start_url}")
-        page = await self.fetch(start_url)
-        goal_check = await self._check_goal(page, goal)
-
-        if goal_check.get("found") and goal_check.get("confidence", 0) > 0.7:
-            logger.info(f"✅ Goal achieved at {start_url} (confidence={goal_check['confidence']})")
-            self.goal_result = goal_check.get("answer")
-            self.confidence = goal_check.get("confidence", 1.0)
-            return page
-
-        # Recurse into high-ranking links
-        sorted_links = sorted(page.links, key=lambda l: getattr(l, "llm_score", 0.0), reverse=True)
-        for link in sorted_links[:5]:  # limit fan-out
-            if link.href not in self.visited:
-                result = await self.crawl_until_goal(link.href, goal, depth + 1)
-                if result is not None:
-                    return result
-        return None
+    async def fetch(self, url: str) -> PageResult:
+        """Wrap BasicSpider.fetch() and add logging for goal context."""
+        logger.info(f"[GoalSpider] Delegating fetch for: {url}")
+        return await super().fetch(url)
 
     async def run_goal(self, start_url: str, goal: str) -> Dict:
-        """Entrypoint for CLI or programmatic use."""
-        page = await self.crawl_until_goal(start_url, goal)
+        """Iterative crawl loop using RAG context evaluation."""
+        heap: List[Tuple[float, str, int]] = [(-1.0, start_url, 0)]
+        best_answer, best_conf = "", 0.0
+
+        while heap and len(self.visited) < self.max_pages:
+            found, conf, ans = await self._evaluate_memory(goal)
+            if conf > best_conf:
+                best_conf, best_answer = conf, ans
+            if found and best_conf >= self.stop_threshold:
+                logger.info(f"✅ Goal reached with confidence={best_conf:.2f}")
+                break
+
+            _, url, depth = heapq.heappop(heap)
+            if url in self.visited or depth > self.max_depth:
+                continue
+            self.visited.add(url)
+
+            logger.info(f"[Depth {depth}] Crawling {url}")
+            page = await super().fetch(url)
+            await self._store_page(page)
+
+            scores = await self._score_links_for_goal(goal, page, best_conf)
+            for l in sorted(page.links, key=lambda x: scores.get(x.href, 0), reverse=True)[:5]:
+                if l.href not in self.visited:
+                    heapq.heappush(heap, (-scores.get(l.href, 0), l.href, depth + 1))
         return {
             "goal": goal,
-            "found": self.goal_result is not None,
-            "confidence": self.confidence,
-            "answer": self.goal_result,
+            "found": bool(best_answer.strip()),
+            "confidence": best_conf,
+            "answer": best_answer.strip(),
             "visited_pages": len(self.visited),
         }
+
+    async def _evaluate_memory(self, goal: str):
+        """
+        Retrieve top-k relevant chunks from DB and ask the planner
+        whether the GOAL is already satisfied.
+        Returns (found: bool, confidence: float, answer: str).
+        """
+        if not self.db.has_embeddings(self.embed_model):
+            return False, 0.0, ""
+
+        # 1️⃣ Embed the goal itself
+        q_vec = self.embedder.embed([goal])[0]
+
+        # 2️⃣ Retrieve the most similar stored chunks
+        retrieved = self.db.similarity_search(
+            q_vec, top_k=self.retrieval_top_k, model=self.embed_model
+        )
+        if not retrieved:
+            return False, 0.0, ""
+
+        # 3️⃣ Concatenate retrieved context and let planner evaluate
+        context_text = "\n\n".join(r["text"] for r in retrieved)
+        found, confidence, answer = await self.planner.evaluate_context(goal, context_text)
+        return found, confidence, answer
+
 
 ```
 
@@ -1272,157 +1598,6 @@ PROTOCOL_DEFAULT = "tcp"          # prefer tcp for stealthy behaviour (OpenVPN o
 CONNECT_TIMEOUT = 30              # seconds to wait for VPN connect
 DISCONNECT_TIMEOUT = 10           # seconds to wait for VPN disconnect
 MAX_CONNECT_RETRIES = 2
-
-```
-
-## `spiders/stealth/stealth_spider.py`
-
-```python
-"""
-StealthSpider: extends BasicSpider to perform fetches while routing
-page loads through a VPN (NordVPN CLI). Important LLM calls will be
-performed after disconnecting the VPN so they originate from your normal IP.
-
-Assumptions:
- - NordVPN CLI is installed and accessible as `nordvpn`.
- - VPNManager in spiders.stealth.vpn_manager supports connect(region, obfuscate, protocol)
-   and disconnect() and raises VPNError when appropriate.
-"""
-
-import asyncio
-import logging
-from typing import Optional
-
-from spider_core.spiders.basic_spider import BasicSpider
-from spider_core.spiders.stealth.vpn_manager import VPNManager, VPNError
-from spider_core.spiders.stealth.stealth_config import (
-    DEFAULT_REGION,
-    DEFAULT_VPN_PROVIDER,
-    REQUIRE_VPN_DEFAULT,
-    DISCONNECT_BEFORE_LLM,
-    RECONNECT_AFTER_LLM,
-    OBFUSCATE_BY_DEFAULT,
-    PROTOCOL_DEFAULT,
-)
-
-logger = logging.getLogger("stealth_spider")
-logger.setLevel(logging.INFO)
-if not logger.handlers:
-    ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter("[StealthSpider] %(message)s"))
-    logger.addHandler(ch)
-
-
-async def maybe_await(result):
-    if asyncio.iscoroutine(result):
-        return await result
-    return result
-
-
-class StealthSpider(BasicSpider):
-    def __init__(
-        self,
-        browser_client,
-        relevance_ranker,
-        chunker,
-        vpn_provider: str = DEFAULT_VPN_PROVIDER,
-        region: str = DEFAULT_REGION,
-        require_vpn: bool = REQUIRE_VPN_DEFAULT,
-        disconnect_before_llm: bool = DISCONNECT_BEFORE_LLM,
-        reconnect_after_llm: bool = RECONNECT_AFTER_LLM,
-        obfuscate: bool = OBFUSCATE_BY_DEFAULT,
-        protocol: str = PROTOCOL_DEFAULT,
-    ):
-        super().__init__(browser_client, relevance_ranker, chunker)
-        self.vpn_provider = vpn_provider
-        self.region = region
-        self.require_vpn = require_vpn
-        self.disconnect_before_llm = disconnect_before_llm
-        self.reconnect_after_llm = reconnect_after_llm
-        self.obfuscate = obfuscate
-        self.protocol = protocol
-        self.vpn = VPNManager(provider=vpn_provider)
-
-    async def _ensure_vpn(self):
-        if self.require_vpn:
-            logger.info(f"Enforcing VPN for region: {self.region}")
-            try:
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(
-                    None,
-                    lambda: self.vpn.connect(self.region, obfuscate=self.obfuscate, protocol=self.protocol),
-                )
-            except Exception as e:
-                logger.error(f"Failed to establish VPN connection: {e}")
-                raise VPNError(str(e))
-            logger.info("VPN connected")
-        else:
-            logger.info("VPN not required for this fetch (require_vpn=False).")
-
-    async def _teardown_vpn_before_llm(self):
-        if self.disconnect_before_llm:
-            try:
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, self.vpn.disconnect)
-                logger.info("VPN disconnected before LLM calls as configured.")
-            except Exception as e:
-                logger.warning(f"Failed to disconnect VPN before LLM calls: {e}")
-        else:
-            logger.info("Configured to NOT disconnect before LLM calls.")
-
-    async def _reconnect_vpn_after_llm_if_needed(self):
-        if self.reconnect_after_llm and self.require_vpn:
-            try:
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(
-                    None,
-                    lambda: self.vpn.connect(self.region, obfuscate=self.obfuscate, protocol=self.protocol),
-                )
-                logger.info("VPN reconnected after LLM calls.")
-            except Exception as e:
-                logger.warning(f"Failed to reconnect VPN after LLM calls: {e}")
-
-    async def fetch(self, url: str):
-        """
-        Override pipeline to:
-         - ensure VPN connected (if required)
-         - render + deterministic extraction + chunking (no LLM)
-         - disconnect VPN (optional) before LLM
-         - run LLM-based scoring
-         - optionally reconnect VPN
-        """
-        # 1) ensure vpn
-        try:
-            await self._ensure_vpn()
-        except VPNError:
-            if self.require_vpn:
-                raise RuntimeError("StealthSpider: unable to establish VPN and VPN is required.")
-            else:
-                logger.warning("Could not establish VPN but continuing because require_vpn is False.")
-
-        logger.info(f"Fetching: {url} using VPN (if connected).")
-
-        # 2) Use BasicSpider helper to fetch without LLM (render/extract/chunk)
-        try:
-            page_result = await self._fetch_without_llm(url)
-        except Exception as e:
-            logger.warning(f"Failed to build PageResult using BasicSpider helper: {e}")
-            # re-raise — we choose failure since fetch couldn't render/extract
-            raise
-
-        # 3) Disconnect VPN before doing LLM calls (if configured)
-        await self._teardown_vpn_before_llm()
-
-        # 4) Now call BasicSpider's scoring routine (which will call the LLM via ranker)
-        try:
-            await self._score_links_with_llm(page_result)
-        except Exception as e:
-            logger.warning(f"LLM ranking failed: {e}")
-
-        # 5) Reconnect VPN after LLM if configured
-        await self._reconnect_vpn_after_llm_if_needed()
-
-        return page_result
 
 ```
 
@@ -1627,12 +1802,88 @@ class VPNManager:
 
 ```
 
+## `spiders/stealth_spider.py`
+
+```python
+import asyncio
+import logging
+from spider_core.spiders.basic_spider import BasicSpider
+from spider_core.spiders.stealth.vpn_manager import VPNManager, VPNError
+from spider_core.spiders.stealth.stealth_config import (
+    DEFAULT_REGION,
+    DEFAULT_VPN_PROVIDER,
+    REQUIRE_VPN_DEFAULT,
+    DISCONNECT_BEFORE_LLM,
+    RECONNECT_AFTER_LLM,
+    OBFUSCATE_BY_DEFAULT,
+    PROTOCOL_DEFAULT,
+)
+
+logger = logging.getLogger("StealthSpider")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter("[StealthSpider] %(message)s"))
+    logger.addHandler(ch)
+
+
+class StealthSpider(BasicSpider):
+    """Adds VPN routing around BasicSpider.fetch()"""
+
+    def __init__(
+        self,
+        browser_client,
+        relevance_ranker,
+        chunker,
+        vpn_provider=DEFAULT_VPN_PROVIDER,
+        region=DEFAULT_REGION,
+        require_vpn=REQUIRE_VPN_DEFAULT,
+        disconnect_before_llm=DISCONNECT_BEFORE_LLM,
+        reconnect_after_llm=RECONNECT_AFTER_LLM,
+        obfuscate=OBFUSCATE_BY_DEFAULT,
+        protocol=PROTOCOL_DEFAULT,
+    ):
+        super().__init__(browser_client, relevance_ranker, chunker)
+        self.vpn = VPNManager(provider=vpn_provider)
+        self.vpn_provider = vpn_provider
+        self.region = region
+        self.require_vpn = require_vpn
+        self.disconnect_before_llm = disconnect_before_llm
+        self.reconnect_after_llm = reconnect_after_llm
+        self.obfuscate = obfuscate
+        self.protocol = protocol
+
+    async def fetch(self, url: str):
+        """Full VPN-controlled fetch."""
+        if self.require_vpn:
+            try:
+                await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: self.vpn.connect(self.region, obfuscate=self.obfuscate, protocol=self.protocol)
+                )
+            except Exception as e:
+                raise VPNError(f"VPN connection failed: {e}")
+        logger.info(f"Fetching under VPN: {url}")
+        page = await self._fetch_without_llm(url)
+        if self.disconnect_before_llm:
+            await asyncio.get_event_loop().run_in_executor(None, self.vpn.disconnect)
+        await self._score_links_with_llm(page)
+        if self.reconnect_after_llm:
+            await asyncio.get_event_loop().run_in_executor(
+                None, lambda: self.vpn.connect(self.region, obfuscate=self.obfuscate, protocol=self.protocol)
+            )
+        return page
+
+```
+
 ## `storage/__init__.py`
 
 ```python
 """
-Storage module: database and persistence layer for crawled pages and embeddings.
+spider_core.storage
+-------------------
+Persistence layer for crawl results, chunks, and vector embeddings.
 """
+
 from spider_core.storage.db import DB
 
 __all__ = ["DB"]
@@ -1643,9 +1894,14 @@ __all__ = ["DB"]
 
 ```python
 # storage/db.py
-import sqlite3, json, time
+import sqlite3
+import json
+import time
 from pathlib import Path
-from typing import Iterable, Optional, Any
+from typing import Iterable, Optional, Any, List, Dict, Tuple
+
+import numpy as np
+
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -1705,7 +1961,24 @@ CREATE INDEX IF NOT EXISTS idx_chunks_page ON chunks(page_url);
 CREATE INDEX IF NOT EXISTS idx_embeds_page ON embeddings(page_url);
 """
 
+
+def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
+    na = np.linalg.norm(a)
+    nb = np.linalg.norm(b)
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+    return float(a @ b / (na * nb))
+
+
 class DB:
+    """
+    SQLite-backed storage for pages, links, chunks, and embeddings.
+
+    New functionality:
+      - has_embeddings(): quick check whether any embeddings exist (optionally by model).
+      - similarity_search(): naive cosine similarity over all stored embeddings, joined with chunks.
+    """
+
     def __init__(self, path: str = "spider_core.db"):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(path, check_same_thread=False)
@@ -1713,7 +1986,17 @@ class DB:
         self.conn.executescript(SCHEMA)
         self.conn.commit()
 
-    def upsert_page(self, url: str, canonical: Optional[str], status: int, title: Optional[str], visible_text: str):
+    # ------------------------------------------------------------------
+    # Page / link / chunk persistence
+    # ------------------------------------------------------------------
+    def upsert_page(
+        self,
+        url: str,
+        canonical: Optional[str],
+        status: int,
+        title: Optional[str],
+        visible_text: str,
+    ):
         self.conn.execute(
             """INSERT INTO pages(url, canonical, status, fetched_at, title, visible_text)
                VALUES(?,?,?,?,?,?)
@@ -1731,10 +2014,15 @@ class DB:
     def upsert_links(self, from_url: str, links: Iterable[dict]):
         rows = []
         for l in links:
-            rows.append((
-                from_url, l["href"], l.get("text"), json.dumps(l.get("rel", [])),
-                float(l.get("llm_score", 0.0))
-            ))
+            rows.append(
+                (
+                    from_url,
+                    l["href"],
+                    l.get("text"),
+                    json.dumps(l.get("rel", [])),
+                    float(l.get("llm_score", 0.0)),
+                )
+            )
         self.conn.executemany(
             """INSERT INTO links(from_url, to_url, anchor_text, rel, llm_score_est)
                VALUES(?,?,?,?,?)
@@ -1743,32 +2031,50 @@ class DB:
                  rel=excluded.rel,
                  llm_score_est=excluded.llm_score_est
             """,
-            rows
+            rows,
         )
         self.conn.commit()
 
     def set_final_link_score(self, from_url: str, to_url: str, score: float):
         self.conn.execute(
             "UPDATE links SET llm_score_final=? WHERE from_url=? AND to_url=?",
-            (float(score), from_url, to_url)
+            (float(score), from_url, to_url),
         )
         self.conn.commit()
 
     def upsert_chunks(self, page_url: str, chunks: Iterable[dict]):
         rows = []
         for c in chunks:
-            rows.append((page_url, int(c["chunk_id"]), c["text"], int(c["token_count"])))
+            rows.append(
+                (
+                    page_url,
+                    int(c["chunk_id"]),
+                    c["text"],
+                    int(c["token_count"]),
+                )
+            )
         self.conn.executemany(
             """INSERT INTO chunks(page_url, chunk_id, text, token_count)
                VALUES(?,?,?,?)
                ON CONFLICT(page_url,chunk_id) DO UPDATE SET
                  text=excluded.text,
                  token_count=excluded.token_count
-            """, rows
+            """,
+            rows,
         )
         self.conn.commit()
 
-    def upsert_embedding(self, page_url: str, chunk_id: int, vec: list[float], model: str, dim: int):
+    # ------------------------------------------------------------------
+    # Embeddings / RAG
+    # ------------------------------------------------------------------
+    def upsert_embedding(
+        self,
+        page_url: str,
+        chunk_id: int,
+        vec: List[float],
+        model: str,
+        dim: int,
+    ):
         self.conn.execute(
             """INSERT INTO embeddings(page_url,chunk_id,vector,model,dim,created_at)
                VALUES(?,?,?,?,?,?)
@@ -1777,18 +2083,96 @@ class DB:
                  dim=excluded.dim,
                  created_at=excluded.created_at
             """,
-            (page_url, chunk_id, json.dumps(vec), model, dim, int(time.time()))
+            (page_url, chunk_id, json.dumps(vec), model, dim, int(time.time())),
         )
         self.conn.commit()
 
+    def has_embeddings(self, model: Optional[str] = None) -> bool:
+        cur = self.conn.cursor()
+        if model:
+            row = cur.execute(
+                "SELECT 1 FROM embeddings WHERE model=? LIMIT 1",
+                (model,),
+            ).fetchone()
+        else:
+            row = cur.execute("SELECT 1 FROM embeddings LIMIT 1").fetchone()
+        return row is not None
+
+    def similarity_search(
+        self,
+        query_vec: List[float],
+        top_k: int = 5,
+        model: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Naive in-memory cosine similarity search over all embeddings
+        (optionally filtered by model). Returns list of:
+          {page_url, chunk_id, text, score}
+        """
+        cur = self.conn.cursor()
+        if model:
+            rows = cur.execute(
+                "SELECT page_url, chunk_id, vector, dim FROM embeddings WHERE model=?",
+                (model,),
+            ).fetchall()
+        else:
+            rows = cur.execute(
+                "SELECT page_url, chunk_id, vector, dim FROM embeddings",
+            ).fetchall()
+
+        if not rows:
+            return []
+
+        q = np.asarray(query_vec, dtype=np.float32)
+        sims: List[Tuple[float, str, int]] = []
+
+        for page_url, chunk_id, vec_json, dim in rows:
+            try:
+                v_list = json.loads(vec_json)
+                v = np.asarray(v_list, dtype=np.float32)
+            except Exception:
+                continue
+            if v.shape[0] != dim:
+                continue
+            score = _cosine_sim(q, v)
+            sims.append((score, page_url, int(chunk_id)))
+
+        sims.sort(key=lambda x: x[0], reverse=True)
+        sims = sims[:top_k]
+
+        # Fetch text for those chunks
+        results: List[Dict[str, Any]] = []
+        for score, page_url, chunk_id in sims:
+            row = cur.execute(
+                "SELECT text FROM chunks WHERE page_url=? AND chunk_id=?",
+                (page_url, chunk_id),
+            ).fetchone()
+            text = row[0] if row else ""
+            results.append(
+                {
+                    "page_url": page_url,
+                    "chunk_id": chunk_id,
+                    "text": text,
+                    "score": float(score),
+                }
+            )
+
+        return results
+
+    # ------------------------------------------------------------------
+    # Misc
+    # ------------------------------------------------------------------
     def already_fetched(self, url: str) -> bool:
-        r = self.conn.execute("SELECT 1 FROM pages WHERE url=? LIMIT 1", (url,)).fetchone()
+        r = self.conn.execute(
+            "SELECT 1 FROM pages WHERE url=? LIMIT 1",
+            (url,),
+        ).fetchone()
         return r is not None
 
     def log(self, url: str, action: str, reason: Optional[str] = None):
         self.conn.execute(
             "INSERT INTO crawl_log(url,action,reason,ts) VALUES(?,?,?,?)",
-            (url, action, reason, int(time.time()))
+            (url, action, reason, int(time.time())),
         )
         self.conn.commit()
 
@@ -1955,11 +2339,11 @@ asyncio.run(main())
     📁 stealth/
         📄 __init__.py
         📄 stealth_config.py
-        📄 stealth_spider.py
         📄 vpn_manager.py
     📄 __init__.py
     📄 basic_spider.py
     📄 goal_spider.py
+    📄 stealth_spider.py
 📁 storage/
     📄 __init__.py
     📄 db.py
@@ -1972,6 +2356,7 @@ asyncio.run(main())
     📄 test_spider.py
 📄 __init__.py
 📄 cli_spider.py
+📄 README.md
 📄 requirements.txt
 ```
 

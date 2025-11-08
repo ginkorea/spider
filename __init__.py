@@ -1,11 +1,6 @@
 """
-Spider implementations: basic, stealth, and goal-oriented variants.
+spider_core
+-----------
+Main package for the goal-oriented LLM web spider system.
 """
-from spider_core.spiders.basic_spider import BasicSpider
-from spider_core.spiders.stealth.stealth_spider import StealthSpider
-try:
-    from spider_core.spiders.goal_spider import GoalOrientedSpider
-except ImportError:
-    GoalOrientedSpider = None
-
-__all__ = ["BasicSpider", "StealthSpider", "GoalOrientedSpider"]
+__all__ = ["spiders", "browser", "goal", "llm", "storage", "base", "core_utils", "extractors"]

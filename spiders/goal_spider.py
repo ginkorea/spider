@@ -1,12 +1,13 @@
-import asyncio
+import heapq
 import logging
-from typing import Set, List, Dict, Optional
-from datetime import datetime
+from typing import Dict, List, Optional, Set, Tuple
 from spider_core.spiders.basic_spider import BasicSpider
 from spider_core.base.page_result import PageResult
-from spider_core.base.link_metadata import LinkMetadata
+from spider_core.storage.db import DB
+from spider_core.goal.goal_planner import GoalPlanner
+from spider_core.llm.embeddings_client import EmbeddingsClient, OpenAIEmbeddings
 
-logger = logging.getLogger("goal_spider")
+logger = logging.getLogger("GoalSpider")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
     ch = logging.StreamHandler()
@@ -15,69 +16,94 @@ if not logger.handlers:
 
 
 class GoalSpider(BasicSpider):
-    """
-    GoalSpider recursively crawls pages until the given goal is achieved.
-    Example goal: 'Find contact email'
-    """
+    """RAG-augmented spider that reasons toward an arbitrary goal with answer grading."""
 
-    def __init__(self, browser_client, relevance_ranker, chunker, llm_client, max_depth: int = 3):
+    def __init__(
+        self,
+        browser_client,
+        relevance_ranker,
+        chunker,
+        llm_client,
+        db: Optional[DB] = None,
+        planner: Optional[GoalPlanner] = None,
+        embedder: Optional[EmbeddingsClient] = None,
+        embed_model: str = "text-embedding-3-small",
+        max_depth: int = 3,
+        stop_threshold: float = 0.9,
+        max_pages: int = 25,
+        retrieval_top_k: int = 8,
+    ):
         super().__init__(browser_client, relevance_ranker, chunker)
-        self.llm_client = llm_client
+        self.llm = llm_client
+        self.db = db or DB()
+        self.planner = planner or GoalPlanner(self.llm)
+        self.embed_model = embed_model
+        self.embedder = embedder or OpenAIEmbeddings(model=embed_model)
         self.max_depth = max_depth
+        self.stop_threshold = stop_threshold
+        self.max_pages = max_pages
+        self.retrieval_top_k = retrieval_top_k
         self.visited: Set[str] = set()
-        self.goal_result: Optional[str] = None
-        self.confidence: float = 0.0
+        self._stability_counter = 0
 
-    async def _check_goal(self, page: PageResult, goal: str) -> Dict:
-        """Ask the LLM if the goal is satisfied on this page."""
-        system_prompt = (
-            "You are a goal evaluator for a web crawler. "
-            "Given a user goal and a web page's text content, "
-            "determine if the goal has been achieved. "
-            "Return JSON with keys: {'found': bool, 'confidence': float, 'answer': str}."
-        )
-        user_prompt = f"GOAL: {goal}\n\nPAGE TEXT:\n{page.page_chunks[0]['text'][:4000] if page.page_chunks else ''}"
-        try:
-            response = await self.llm_client.complete_json(system_prompt, user_prompt)
-            return response
-        except Exception as e:
-            logger.warning(f"Goal check failed: {e}")
-            return {"found": False, "confidence": 0.0, "answer": ""}
-
-    async def crawl_until_goal(self, start_url: str, goal: str, depth: int = 0) -> Optional[PageResult]:
-        """Recursive crawler that continues until goal found or depth exhausted."""
-        if depth > self.max_depth:
-            return None
-        if start_url in self.visited:
-            return None
-        self.visited.add(start_url)
-
-        logger.info(f"[Depth {depth}] Crawling: {start_url}")
-        page = await self.fetch(start_url)
-        goal_check = await self._check_goal(page, goal)
-
-        if goal_check.get("found") and goal_check.get("confidence", 0) > 0.7:
-            logger.info(f"✅ Goal achieved at {start_url} (confidence={goal_check['confidence']})")
-            self.goal_result = goal_check.get("answer")
-            self.confidence = goal_check.get("confidence", 1.0)
-            return page
-
-        # Recurse into high-ranking links
-        sorted_links = sorted(page.links, key=lambda l: getattr(l, "llm_score", 0.0), reverse=True)
-        for link in sorted_links[:5]:  # limit fan-out
-            if link.href not in self.visited:
-                result = await self.crawl_until_goal(link.href, goal, depth + 1)
-                if result is not None:
-                    return result
-        return None
+    async def fetch(self, url: str) -> PageResult:
+        logger.info(f"[GoalSpider] Delegating fetch for: {url}")
+        return await super().fetch(url)
 
     async def run_goal(self, start_url: str, goal: str) -> Dict:
-        """Entrypoint for CLI or programmatic use."""
-        page = await self.crawl_until_goal(start_url, goal)
+        heap: List[Tuple[float, str, int]] = [(-1.0, start_url, 0)]
+        best_answer, best_conf = "", 0.0
+
+        while heap and len(self.visited) < self.max_pages:
+            found, conf, ans = await self._evaluate_memory(goal)
+            if conf > best_conf:
+                best_conf, best_answer = conf, ans
+
+            # ✅ Sanity check: self-grade the answer before deciding to stop
+            if found and ans:
+                valid, grade_conf, reason = await self.planner.grade_answer(goal, ans)
+                conf = min(conf, grade_conf)
+                if valid:
+                    self._stability_counter += 1
+                    logger.info(f"[Sanity] Answer validated ({grade_conf:.2f}): {reason}")
+                else:
+                    self._stability_counter = 0
+                    logger.info(f"[Sanity] Answer rejected ({grade_conf:.2f}): {reason}")
+
+            # ✅ Conservative stop condition: requires repeated confirmations
+            if found and conf >= self.stop_threshold and self._stability_counter >= 2:
+                logger.info(f"✅ Goal reached with confidence={conf:.2f} after {len(self.visited)} pages")
+                break
+
+            _, url, depth = heapq.heappop(heap)
+            if url in self.visited or depth > self.max_depth:
+                continue
+            self.visited.add(url)
+
+            logger.info(f"[Depth {depth}] Crawling {url}")
+            page = await super().fetch(url)
+            await self._store_page(page)
+
+            scores = await self._score_links_for_goal(goal, page, best_conf)
+            for l in sorted(page.links, key=lambda x: scores.get(x.href, 0), reverse=True)[:5]:
+                if l.href not in self.visited:
+                    heapq.heappush(heap, (-scores.get(l.href, 0), l.href, depth + 1))
+
         return {
             "goal": goal,
-            "found": self.goal_result is not None,
-            "confidence": self.confidence,
-            "answer": self.goal_result,
+            "found": bool(best_answer.strip()),
+            "confidence": best_conf,
+            "answer": best_answer.strip(),
             "visited_pages": len(self.visited),
         }
+
+    async def _evaluate_memory(self, goal: str):
+        """RAG retrieval + context evaluation."""
+        if not self.db.has_embeddings(self.embed_model):
+            return False, 0.0, ""
+        q_vec = self.embedder.embed([goal])[0]
+        retrieved = self.db.similarity_search(q_vec, top_k=self.retrieval_top_k, model=self.embed_model)
+        if not retrieved:
+            return False, 0.0, ""
+        context_text = "\n\n".join(r["text"] for r in retrieved)
+        return await self.planner.evaluate_context(goal, context_text)
