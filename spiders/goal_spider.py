@@ -45,12 +45,39 @@ class GoalSpider(BasicSpider):
         self.retrieval_top_k = retrieval_top_k
         self.visited: Set[str] = set()
         self._stability_counter = 0
+        self.current_goal = None  # propagate to BasicSpider
+
+    async def _store_page(self, page: PageResult):
+        """Store page text, chunks, and embeddings for later retrieval."""
+        try:
+            visible_text = "\n".join(c["text"] for c in page.page_chunks)
+            self.db.upsert_page(
+                page.url, page.canonical, page.status, None, visible_text
+            )
+            self.db.upsert_links(page.url, [l.__dict__ for l in page.links])
+            self.db.upsert_chunks(page.url, page.page_chunks)
+
+            # Embed chunks for RAG
+            for chunk in page.page_chunks:
+                vec = self.embedder.embed([chunk["text"]])[0]
+                self.db.upsert_embedding(
+                    page.url,
+                    chunk["chunk_id"],
+                    vec,
+                    self.embed_model,
+                    len(vec),
+                )
+        except Exception as e:
+            logger.warning(f"[GoalSpider] Failed to store page {page.url}: {e}")
 
     async def fetch(self, url: str) -> PageResult:
+        """Goal-aware fetch that ensures goal context propagates to BasicSpider."""
+        self.current_goal = getattr(self, "current_goal", None)
         logger.info(f"[GoalSpider] Delegating fetch for: {url}")
         return await super().fetch(url)
 
     async def run_goal(self, start_url: str, goal: str) -> Dict:
+        self.current_goal = goal
         heap: List[Tuple[float, str, int]] = [(-1.0, start_url, 0)]
         best_answer, best_conf = "", 0.0
 
@@ -59,7 +86,7 @@ class GoalSpider(BasicSpider):
             if conf > best_conf:
                 best_conf, best_answer = conf, ans
 
-            # ✅ Sanity check: self-grade the answer before deciding to stop
+            # ✅ Sanity check / self-grade
             if found and ans:
                 valid, grade_conf, reason = await self.planner.grade_answer(goal, ans)
                 conf = min(conf, grade_conf)
@@ -70,7 +97,7 @@ class GoalSpider(BasicSpider):
                     self._stability_counter = 0
                     logger.info(f"[Sanity] Answer rejected ({grade_conf:.2f}): {reason}")
 
-            # ✅ Conservative stop condition: requires repeated confirmations
+            # Stop condition
             if found and conf >= self.stop_threshold and self._stability_counter >= 2:
                 logger.info(f"✅ Goal reached with confidence={conf:.2f} after {len(self.visited)} pages")
                 break
@@ -81,9 +108,10 @@ class GoalSpider(BasicSpider):
             self.visited.add(url)
 
             logger.info(f"[Depth {depth}] Crawling {url}")
-            page = await super().fetch(url)
+            page = await self.fetch(url)
             await self._store_page(page)
 
+            # Goal-aware link selection
             scores = await self._score_links_for_goal(goal, page, best_conf)
             for l in sorted(page.links, key=lambda x: scores.get(x.href, 0), reverse=True)[:5]:
                 if l.href not in self.visited:
@@ -107,3 +135,19 @@ class GoalSpider(BasicSpider):
             return False, 0.0, ""
         context_text = "\n\n".join(r["text"] for r in retrieved)
         return await self.planner.evaluate_context(goal, context_text)
+
+    async def _score_links_for_goal(self, goal: str, page: PageResult, current_conf: float) -> Dict[str, float]:
+        """LLM-guided scoring of links based on page snippet."""
+        try:
+            page_snippet = (
+                page.page_chunks[0]["text"][:1200] if page.page_chunks else ""
+            )
+            link_dicts = [
+                {"href": l.href, "text": l.text or ""} for l in page.links
+            ]
+            return await self.planner.score_links(
+                goal, page.url, page_snippet, link_dicts, current_conf
+            )
+        except Exception as e:
+            logger.warning(f"[GoalSpider] Link scoring failed: {e}")
+            return {}

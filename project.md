@@ -8,7 +8,7 @@
 | Total Directories | 10 |
 | Total Indexed Files | 39 |
 | Skipped Files | 0 |
-| Indexed Size | 79.99 KB |
+| Indexed Size | 81.82 KB |
 | Max File Size Limit | 2 MB |
 
 ## 📚 Table of Contents
@@ -920,9 +920,9 @@ GOAL_CHUNK_SYSTEM = (
     "3) propose next links (subset of candidates) most likely to progress the goal.\n\n"
     "Return ONLY valid JSON with keys:\n"
     "{"
-    '  "goal_satisfaction_estimate": float (0..1),'
-    '  "answer_delta": "short string",'
-    '  "next_link_scores": [{"href": "...", "score": float (0..1)}]'
+    '  \"goal_satisfaction_estimate\": float (0..1),'
+    '  \"answer_delta\": \"short string\",'
+    '  \"next_link_scores\": [{\"href\": \"...\", \"score\": float (0..1)}]'
     "}"
 )
 
@@ -930,31 +930,40 @@ GOAL_CONTEXT_SYSTEM = (
     "You are an evaluator for a goal-oriented web crawler.\n"
     "Your job is to decide whether the user's GOAL has been answered by the given CONTEXT.\n\n"
     "Rules:\n"
-    "- Be strict but pragmatic: if the context clearly contains the answer, mark found=true.\n"
-    "- 'confidence' is a float between 0 and 1 expressing how sure you are that the GOAL is satisfied.\n"
-    "- 'answer' should be a short, direct answer in natural language, using only information from CONTEXT.\n\n"
+    "- Be strict but pragmatic: only mark found=true if the answer is explicitly in CONTEXT.\n"
+    "- Always extract the literal answer text (e.g., street address, email, name, etc.).\n"
+    "- Never say 'provided above' or 'in the context'; quote the exact answer.\n"
+    "- 'confidence' is a float (0..1) expressing how sure you are that this is the correct answer.\n"
+    "- 'answer' must be short and direct, extracted verbatim from CONTEXT.\n\n"
     "Return ONLY valid JSON with keys:\n"
     "{"
-    '  "found": bool,'
-    '  "confidence": float (0..1),'
-    '  "answer": "short string"'
+    '  \"found\": bool,'
+    '  \"confidence\": float (0..1),'
+    '  \"answer\": \"short string\"'
+    "}"
+)
+
+# New prompt: self-grade sanity check
+GOAL_GRADE_SYSTEM = (
+    "You are a strict grader verifying whether an extracted ANSWER correctly satisfies a GOAL.\n"
+    "Evaluate correctness, completeness, and specificity.\n\n"
+    "Return ONLY JSON with keys:\n"
+    "{"
+    '  \"valid\": bool,'
+    '  \"confidence\": float (0..1),'
+    '  \"reason\": \"short justification\"'
     "}"
 )
 
 LINK_PLANNER_SYSTEM = (
-    "You are a navigation planner for a generic goal-oriented web crawler.\n"
-    "Given a GOAL, the CURRENT PAGE URL, a PAGE SNIPPET, the current CONFIDENCE, and a list of CANDIDATE LINKS, "
-    "you will assign each link a score from 0.0 to 1.0 indicating how promising it is for making progress "
-    "toward the GOAL.\n\n"
-    "You must handle arbitrary goals (not just contact info): product questions, policies, biographies, etc.\n"
-    "Prefer links that:\n"
-    "- are semantically related to the GOAL based on their anchor text and href,\n"
-    "- look like high-level information or overview pages when the GOAL is broad,\n"
-    "- look like specific detail pages (FAQ, docs, terms, policies, etc.) when the GOAL is narrow.\n\n"
-    "Return ONLY valid JSON of the form:\n"
+    "You are a navigation planner for a goal-oriented web crawler.\n"
+    "Given a GOAL, CURRENT PAGE URL, PAGE SNIPPET, current CONFIDENCE, and a list of CANDIDATE LINKS, "
+    "assign each link a score 0.0–1.0 indicating how promising it is for achieving the GOAL.\n\n"
+    "Handle arbitrary goals (contacts, products, biographies, etc.). Prefer links semantically related to the GOAL.\n\n"
+    "Return ONLY valid JSON:\n"
     "{"
-    '  "link_scores": ['
-    '    {"href": "https://example.com/path", "score": 0.0},'
+    '  \"link_scores\": ['
+    '    {\"href\": \"https://example.com/path\", \"score\": 0.0},'
     '    ...'
     "  ]"
     "}"
@@ -972,89 +981,35 @@ def build_chunk_prompt(goal: str, chunk_text: str, link_candidates: List[Dict[st
 
 
 class GoalPlanner:
-    """
-    High-level planner for goal-oriented crawling.
-
-    Responsibilities:
-      - Evaluate whether a given CONTEXT (RAG-retrieved text) satisfies the GOAL.
-      - Score links on a page according to how promising they are for the GOAL.
-      - (Legacy) evaluate individual chunks for goal satisfaction and per-link scores.
-    """
+    """High-level planner for goal-oriented crawling with RAG evaluation and answer validation."""
 
     def __init__(self, llm: OpenAIGPTClient):
         self.llm = llm
 
-    # ------------------------------------------------------------------
-    # Legacy / chunk-based interface (kept for compatibility)
-    # ------------------------------------------------------------------
-    async def evaluate_chunk(
-        self,
-        goal: str,
-        chunk_text: str,
-        link_candidates: List[Dict[str, Any]],
-    ) -> Tuple[float, str, Dict[str, float]]:
-        """
-        Evaluate a single PAGE CHUNK relative to GOAL.
-
-        Returns:
-          - goal_satisfaction_estimate (0..1)
-          - answer_delta (short string)
-          - next_link_scores: {href -> score}
-        """
-        prompt = build_chunk_prompt(goal, chunk_text, link_candidates)
-        out = await self.llm.complete_json(GOAL_CHUNK_SYSTEM, prompt)
-
-        est = float(out.get("goal_satisfaction_estimate", 0.0))
-        delta = out.get("answer_delta", "").strip()
-        next_scores_raw = out.get("next_link_scores", []) or []
-        scored = {}
-        for x in next_scores_raw:
-            href = x.get("href")
-            if not href:
-                continue
-            try:
-                s = float(x.get("score", 0.0))
-            except (TypeError, ValueError):
-                s = 0.0
-            scored[href] = s
-
-        return est, delta, scored
-
-    # ------------------------------------------------------------------
-    # NEW: Context-level goal evaluation (RAG)
-    # ------------------------------------------------------------------
+    # --- Context-level goal evaluation (RAG) ---
     async def evaluate_context(self, goal: str, context_text: str) -> Tuple[bool, float, str]:
-        """
-        Given a GOAL and aggregated CONTEXT (e.g. top-k retrieved chunks),
-        decide whether the GOAL is satisfied.
-
-        Returns:
-          - found: bool
-          - confidence: float (0..1)
-          - answer: short string
-        """
-        # Don't waste tokens if there's no context at all
         if not context_text.strip():
             return False, 0.0, ""
-
-        prompt = (
-            f"GOAL:\n{goal}\n\n"
-            f"CONTEXT (truncated if long):\n{context_text[:8000]}"
-        )
-
+        prompt = f"GOAL:\n{goal}\n\nCONTEXT (truncated):\n{context_text[:8000]}"
         out = await self.llm.complete_json(GOAL_CONTEXT_SYSTEM, prompt)
         found = bool(out.get("found", False))
-        try:
-            confidence = float(out.get("confidence", 0.0))
-        except (TypeError, ValueError):
-            confidence = 0.0
+        confidence = float(out.get("confidence", 0.0))
         answer = out.get("answer", "").strip()
-
         return found, confidence, answer
 
-    # ------------------------------------------------------------------
-    # NEW: Generic, goal-aware link scoring
-    # ------------------------------------------------------------------
+    # --- Sanity check on extracted answer ---
+    async def grade_answer(self, goal: str, answer: str) -> Tuple[bool, float, str]:
+        """Verify that the extracted answer actually satisfies the goal."""
+        if not answer.strip():
+            return False, 0.0, "Empty answer."
+        prompt = f"GOAL:\n{goal}\n\nANSWER:\n{answer}"
+        out = await self.llm.complete_json(GOAL_GRADE_SYSTEM, prompt)
+        valid = bool(out.get("valid", False))
+        confidence = float(out.get("confidence", 0.0))
+        reason = out.get("reason", "").strip()
+        return valid, confidence, reason
+
+    # --- Goal-aware link scoring ---
     async def score_links(
         self,
         goal: str,
@@ -1064,37 +1019,18 @@ class GoalPlanner:
         current_confidence: float,
         max_links: int = 50,
     ) -> Dict[str, float]:
-        """
-        Score candidate links for their usefulness toward achieving GOAL.
-
-        link_candidates: list of dicts with keys "href", "text".
-        Returns: {href -> score (0..1)}.
-        """
         if not link_candidates:
             return {}
-
-        # truncate to keep token usage sane
         trimmed = link_candidates[:max_links]
         page_snippet = (page_snippet or "")[:1500]
-
         user_prompt = (
-            f"GOAL:\n{goal}\n\n"
-            f"CURRENT CONFIDENCE:\n{current_confidence}\n\n"
-            f"CURRENT PAGE URL:\n{page_url}\n\n"
-            f"PAGE SNIPPET:\n{page_snippet}\n\n"
-            f"CANDIDATE LINKS (href + text):\n"
-            f"{[{'href': l.get('href'), 'text': (l.get('text') or '')[:200]} for l in trimmed]}\n\n"
-            "Assign each link a 'score' from 0.0 to 1.0 indicating how promising it is for making progress "
-            "toward the GOAL. You may give 0.0 to clearly irrelevant links."
+            f"GOAL:\n{goal}\n\nCURRENT CONFIDENCE:\n{current_confidence}\n\n"
+            f"PAGE URL:\n{page_url}\n\nPAGE SNIPPET:\n{page_snippet}\n\n"
+            f"CANDIDATE LINKS:\n"
+            f"{[{'href': l.get('href'), 'text': (l.get('text') or '')[:200]} for l in trimmed]}"
         )
-
-        try:
-            out = await self.llm.complete_json(LINK_PLANNER_SYSTEM, user_prompt)
-        except Exception:
-            # Fail safe: no goal-aware scores
-            return {}
-
-        scores: Dict[str, float] = {}
+        out = await self.llm.complete_json(LINK_PLANNER_SYSTEM, user_prompt)
+        scores = {}
         for item in out.get("link_scores", []) or []:
             href = item.get("href")
             if not href:
@@ -1104,7 +1040,6 @@ class GoalPlanner:
             except (TypeError, ValueError):
                 s = 0.0
             scores[href] = s
-
         return scores
 
 ```
@@ -1368,6 +1303,7 @@ __all__ = ["BasicSpider", "StealthSpider", "GoalSpider"]
 ```python
 import asyncio
 import logging
+import numpy as np
 from datetime import datetime
 from typing import List
 from spider_core.base.spider import Spider
@@ -1377,6 +1313,7 @@ from spider_core.extractors.deterministic_extractor import DeterministicLinkExtr
 from spider_core.core_utils.chunking import TextChunker
 from spider_core.llm.relevance_ranker import RelevanceRanker
 from spider_core.base.link_metadata import LinkMetadata
+from spider_core.llm.embeddings_client import OpenAIEmbeddings, cosine_sim
 
 logger = logging.getLogger("BasicSpider")
 logger.setLevel(logging.INFO)
@@ -1395,13 +1332,21 @@ async def maybe_await(result):
 class BasicSpider(Spider):
     """
     Handles the deterministic pipeline:
-    render → extract → chunk → (optional) LLM scoring
+      render → extract → chunk → (optional) link ranking
+
+    Features:
+    - Async rendering and chunking
+    - Hybrid embedding prefilter + async LLM link scoring (goal mode)
+    - Lightweight lexical ranking (generic mode)
     """
 
     def __init__(self, browser_client: BrowserClient, relevance_ranker: RelevanceRanker, chunker: TextChunker):
         self.browser_client = browser_client
         self.relevance_ranker = relevance_ranker
         self.chunker = chunker
+        self.embedder = None
+        self.llm = getattr(relevance_ranker, "llm_client", None)
+        self.semaphore = asyncio.Semaphore(8)  # limit concurrent LLM calls
 
     async def fetch(self, url: str) -> PageResult:
         logger.info(f"Starting fetch pipeline for: {url}")
@@ -1439,14 +1384,86 @@ class BasicSpider(Spider):
         )
 
     async def _score_links_with_llm(self, page_result: PageResult):
-        logger.info("Scoring links with LLM...")
-        rr = self.relevance_ranker
-        method = next((getattr(rr, n) for n in ("score_links", "rank_links", "rank", "score") if hasattr(rr, n)), None)
-        if not method:
+        """
+        Hybrid fast mode:
+        - If a goal is set → embedding prefilter + async LLM scoring
+        - If no goal → cheap lexical heuristic ranking (no LLM calls)
+        """
+        links = page_result.links
+        if not links:
             return
-        res = method(page_result.links, page_result.page_chunks)
-        await maybe_await(res)
-        logger.info("LLM scoring completed.")
+
+        goal_text = getattr(self, "current_goal", None)
+        goal_mode = bool(goal_text)
+
+        # --- 🧩 1️⃣ No-goal mode: lightweight lexical ranking ---
+        if not goal_mode:
+            logger.info("No goal provided — using lightweight lexical ranking.")
+            keywords = {"contact", "about", "privacy", "terms", "help", "faq", "support", "company"}
+            for link in links:
+                text = (link.text or link.href or "").lower()
+                score = 0.0
+                for kw in keywords:
+                    if kw in text:
+                        score += 0.2
+                if len(text) < 40:
+                    score += 0.05  # short nav links are often structural
+                link.llm_score = min(score, 1.0)
+            return
+
+        # --- ⚡ 2️⃣ Goal mode: embedding prefilter + parallel LLM scoring ---
+        logger.info("Scoring links with hybrid async LLM pipeline...")
+        try:
+            if self.embedder is None:
+                self.embedder = OpenAIEmbeddings(model="text-embedding-3-small")
+            goal_vec = self.embedder.embed([goal_text])[0]
+            link_texts = [(l.href, (l.text or l.href or "")[:200]) for l in links]
+            link_vecs = self.embedder.embed([t for _, t in link_texts])
+
+            sims = [
+                cosine_sim(np.array(goal_vec), np.array(vec))
+                for vec in link_vecs
+            ]
+            ranked_links = sorted(zip(links, sims), key=lambda x: x[1], reverse=True)
+            top_links = [l for l, _ in ranked_links[:15]]
+        except Exception as e:
+            logger.warning(f"Embedding prefilter failed: {e}")
+            top_links = links[:10]
+
+        if not hasattr(self, "llm") or self.llm is None:
+            logger.warning("No LLM client attached; skipping scoring.")
+            return
+
+        async def score_one_link(link: LinkMetadata):
+            async with self.semaphore:
+                try:
+                    prompt = (
+                        f"GOAL:\n{goal_text}\n\n"
+                        f"LINK:\n{link.href}\n"
+                        f"ANCHOR TEXT:\n{link.text or '(none)'}\n"
+                        f"CONTEXT SAMPLE:\n"
+                        f"{page_result.page_chunks[0]['text'][:800] if page_result.page_chunks else ''}\n\n"
+                        "Rate how relevant this link is for achieving the goal.\n"
+                        "Return JSON: {\"score\": float (0..1)}"
+                    )
+                    result = await self.llm.complete_json(
+                        "You are a relevance evaluator for a web crawler.", prompt
+                    )
+                    link.llm_score = float(result.get("score", 0.0))
+                except Exception as e:
+                    logger.debug(f"LLM failed on {link.href}: {e}")
+                    link.llm_score = 0.0
+                return link
+
+        # Run LLM scoring concurrently
+        scored_links = await asyncio.gather(*(score_one_link(l) for l in top_links))
+        scored_links.sort(key=lambda l: getattr(l, "llm_score", 0.0), reverse=True)
+        logger.info(f"Parallel LLM scoring completed ({len(scored_links)} links).")
+
+        # Merge scores back into full link set
+        scored_map = {l.href: getattr(l, "llm_score", 0.0) for l in scored_links}
+        for link in page_result.links:
+            link.llm_score = scored_map.get(link.href, getattr(link, "llm_score", 0.0))
 
     def summarize_result(self, page_result: PageResult) -> str:
         return (
@@ -1479,7 +1496,7 @@ if not logger.handlers:
 
 
 class GoalSpider(BasicSpider):
-    """RAG-augmented spider that reasons toward an arbitrary goal."""
+    """RAG-augmented spider that reasons toward an arbitrary goal with answer grading."""
 
     def __init__(
         self,
@@ -1507,14 +1524,13 @@ class GoalSpider(BasicSpider):
         self.max_pages = max_pages
         self.retrieval_top_k = retrieval_top_k
         self.visited: Set[str] = set()
+        self._stability_counter = 0
 
     async def fetch(self, url: str) -> PageResult:
-        """Wrap BasicSpider.fetch() and add logging for goal context."""
         logger.info(f"[GoalSpider] Delegating fetch for: {url}")
         return await super().fetch(url)
 
     async def run_goal(self, start_url: str, goal: str) -> Dict:
-        """Iterative crawl loop using RAG context evaluation."""
         heap: List[Tuple[float, str, int]] = [(-1.0, start_url, 0)]
         best_answer, best_conf = "", 0.0
 
@@ -1522,8 +1538,21 @@ class GoalSpider(BasicSpider):
             found, conf, ans = await self._evaluate_memory(goal)
             if conf > best_conf:
                 best_conf, best_answer = conf, ans
-            if found and best_conf >= self.stop_threshold:
-                logger.info(f"✅ Goal reached with confidence={best_conf:.2f}")
+
+            # ✅ Sanity check: self-grade the answer before deciding to stop
+            if found and ans:
+                valid, grade_conf, reason = await self.planner.grade_answer(goal, ans)
+                conf = min(conf, grade_conf)
+                if valid:
+                    self._stability_counter += 1
+                    logger.info(f"[Sanity] Answer validated ({grade_conf:.2f}): {reason}")
+                else:
+                    self._stability_counter = 0
+                    logger.info(f"[Sanity] Answer rejected ({grade_conf:.2f}): {reason}")
+
+            # ✅ Conservative stop condition: requires repeated confirmations
+            if found and conf >= self.stop_threshold and self._stability_counter >= 2:
+                logger.info(f"✅ Goal reached with confidence={conf:.2f} after {len(self.visited)} pages")
                 break
 
             _, url, depth = heapq.heappop(heap)
@@ -1539,6 +1568,7 @@ class GoalSpider(BasicSpider):
             for l in sorted(page.links, key=lambda x: scores.get(x.href, 0), reverse=True)[:5]:
                 if l.href not in self.visited:
                     heapq.heappush(heap, (-scores.get(l.href, 0), l.href, depth + 1))
+
         return {
             "goal": goal,
             "found": bool(best_answer.strip()),
@@ -1548,29 +1578,15 @@ class GoalSpider(BasicSpider):
         }
 
     async def _evaluate_memory(self, goal: str):
-        """
-        Retrieve top-k relevant chunks from DB and ask the planner
-        whether the GOAL is already satisfied.
-        Returns (found: bool, confidence: float, answer: str).
-        """
+        """RAG retrieval + context evaluation."""
         if not self.db.has_embeddings(self.embed_model):
             return False, 0.0, ""
-
-        # 1️⃣ Embed the goal itself
         q_vec = self.embedder.embed([goal])[0]
-
-        # 2️⃣ Retrieve the most similar stored chunks
-        retrieved = self.db.similarity_search(
-            q_vec, top_k=self.retrieval_top_k, model=self.embed_model
-        )
+        retrieved = self.db.similarity_search(q_vec, top_k=self.retrieval_top_k, model=self.embed_model)
         if not retrieved:
             return False, 0.0, ""
-
-        # 3️⃣ Concatenate retrieved context and let planner evaluate
         context_text = "\n\n".join(r["text"] for r in retrieved)
-        found, confidence, answer = await self.planner.evaluate_context(goal, context_text)
-        return found, confidence, answer
-
+        return await self.planner.evaluate_context(goal, context_text)
 
 ```
 
