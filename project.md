@@ -1,8 +1,111 @@
 # Project Compilation: spider_core
 
+## 🧾 Summary
+
+| Metric | Value |
+|:--|:--|
+| Root Directory | `/home/gompert/data/workspace/spider_core` |
+| Total Directories | 10 |
+| Total Indexed Files | 37 |
+| Skipped Files | 0 |
+| Indexed Size | 58.12 KB |
+| Max File Size Limit | 2 MB |
+
+## 📚 Table of Contents
+
+- [__init__.py](#init-py)
+- [base/__init__.py](#base-init-py)
+- [base/link_metadata.py](#base-link-metadata-py)
+- [base/page_result.py](#base-page-result-py)
+- [base/spider.py](#base-spider-py)
+- [browser/__init__.py](#browser-init-py)
+- [browser/browser_client.py](#browser-browser-client-py)
+- [browser/playwright_client.py](#browser-playwright-client-py)
+- [cli_spider.py](#cli-spider-py)
+- [core_utils/__init__.py](#core-utils-init-py)
+- [core_utils/chunking.py](#core-utils-chunking-py)
+- [core_utils/url_utils.py](#core-utils-url-utils-py)
+- [extractors/__init__.py](#extractors-init-py)
+- [extractors/deterministic_extractor.py](#extractors-deterministic-extractor-py)
+- [goal/__init__.py](#goal-init-py)
+- [goal/goal_planner.py](#goal-goal-planner-py)
+- [llm/__init__.py](#llm-init-py)
+- [llm/embeddings_client.py](#llm-embeddings-client-py)
+- [llm/llm_client.py](#llm-llm-client-py)
+- [llm/openai_gpt_client.py](#llm-openai-gpt-client-py)
+- [llm/relevance_ranker.py](#llm-relevance-ranker-py)
+- [requirements.txt](#requirements-txt)
+- [spiders/__init__.py](#spiders-init-py)
+- [spiders/basic_spider.py](#spiders-basic-spider-py)
+- [spiders/goal_spider.py](#spiders-goal-spider-py)
+- [spiders/stealth/__init__.py](#spiders-stealth-init-py)
+- [spiders/stealth/stealth_config.py](#spiders-stealth-stealth-config-py)
+- [spiders/stealth/stealth_spider.py](#spiders-stealth-stealth-spider-py)
+- [spiders/stealth/vpn_manager.py](#spiders-stealth-vpn-manager-py)
+- [storage/__init__.py](#storage-init-py)
+- [storage/db.py](#storage-db-py)
+- [test/test.py](#test-test-py)
+- [test/test2.py](#test-test2-py)
+- [test/test3.py](#test-test3-py)
+- [test/test4.py](#test-test4-py)
+- [test/test_ranker.py](#test-test-ranker-py)
+- [test/test_spider.py](#test-test-spider-py)
+
+## 📂 Project Structure
+
+```
+📁 base/
+    📄 __init__.py
+    📄 link_metadata.py
+    📄 page_result.py
+    📄 spider.py
+📁 browser/
+    📄 __init__.py
+    📄 browser_client.py
+    📄 playwright_client.py
+📁 core_utils/
+    📄 __init__.py
+    📄 chunking.py
+    📄 url_utils.py
+📁 extractors/
+    📄 __init__.py
+    📄 deterministic_extractor.py
+📁 goal/
+    📄 __init__.py
+    📄 goal_planner.py
+📁 llm/
+    📄 __init__.py
+    📄 embeddings_client.py
+    📄 llm_client.py
+    📄 openai_gpt_client.py
+    📄 relevance_ranker.py
+📁 spiders/
+    📁 stealth/
+        📄 __init__.py
+        📄 stealth_config.py
+        📄 stealth_spider.py
+        📄 vpn_manager.py
+    📄 __init__.py
+    📄 basic_spider.py
+    📄 goal_spider.py
+📁 storage/
+    📄 __init__.py
+    📄 db.py
+📁 test/
+    📄 test.py
+    📄 test2.py
+    📄 test3.py
+    📄 test4.py
+    📄 test_ranker.py
+    📄 test_spider.py
+📄 __init__.py
+📄 cli_spider.py
+📄 requirements.txt
+```
+
 ## `__init__.py`
 
-```py
+```python
 """
 Spider implementations: basic, stealth, and goal-oriented variants.
 """
@@ -19,13 +122,13 @@ __all__ = ["BasicSpider", "StealthSpider", "GoalOrientedSpider"]
 
 ## `base/__init__.py`
 
-```py
+```python
 
 ```
 
 ## `base/link_metadata.py`
 
-```py
+```python
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -44,7 +147,7 @@ class LinkMetadata:
 
 ## `base/page_result.py`
 
-```py
+```python
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -65,7 +168,7 @@ class PageResult:
 
 ## `base/spider.py`
 
-```py
+```python
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
@@ -88,13 +191,13 @@ class Spider(ABC):
 
 ## `browser/__init__.py`
 
-```py
+```python
 
 ```
 
 ## `browser/browser_client.py`
 
-```py
+```python
 from abc import ABC, abstractmethod
 from typing import Tuple
 
@@ -118,7 +221,7 @@ class BrowserClient(ABC):
 
 ## `browser/playwright_client.py`
 
-```py
+```python
 import asyncio
 from typing import Tuple
 from playwright.async_api import async_playwright, Browser, Page
@@ -186,7 +289,7 @@ class PlaywrightBrowserClient(BrowserClient):
 
 ## `cli_spider.py`
 
-```py
+```python
 import argparse
 import asyncio
 import json
@@ -198,7 +301,9 @@ from spider_core.llm.openai_gpt_client import OpenAIGPTClient
 from spider_core.llm.relevance_ranker import RelevanceRanker
 from spider_core.spiders.basic_spider import BasicSpider
 
-# ✅ Optional stealth imports
+# ---------------------------------------------------------------------
+# Optional stealth mode imports
+# ---------------------------------------------------------------------
 try:
     from spider_core.spiders.stealth.stealth_spider import StealthSpider
     from spider_core.spiders.stealth.stealth_config import (
@@ -210,19 +315,21 @@ try:
 except ImportError:
     STEALTH_AVAILABLE = False
 
-# ✅ Goal-oriented modules
+# ---------------------------------------------------------------------
+# Optional goal-oriented imports
+# ---------------------------------------------------------------------
 try:
-    from spider_core.goal.goal_planner import GoalPlanner
     from spider_core.spiders.goal_spider import GoalOrientedSpider
+    from spider_core.goal.goal_planner import GoalPlanner
     from spider_core.storage.db import DB
     GOAL_AVAILABLE = True
 except ImportError:
     GOAL_AVAILABLE = False
 
 
-# -----------------------------------------------------------------------------
-# Core runner for single-page spiders
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Helper: run a simple single-page spider (basic/stealth)
+# ---------------------------------------------------------------------
 async def run_basic_spider(spider, url, output_path, pretty):
     print(f"🔍 Fetching: {url} using {spider.__class__.__name__} ...")
     result = await spider.fetch(url)
@@ -236,48 +343,53 @@ async def run_basic_spider(spider, url, output_path, pretty):
             indent=4 if pretty else None,
         )
         f.write("\n")
+
     print("\n--- Summary ---")
     print(spider.summarize_result(result))
     print("----------------")
     print(f"✅ Saved result to {output_path}")
 
 
-# -----------------------------------------------------------------------------
-# CLI entrypoint
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# CLI Entrypoint
+# ---------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description="LLM-powered web spider CLI")
+    parser = argparse.ArgumentParser(description="LLM-powered recursive web spider CLI")
 
-    # Standard arguments
+    # Base arguments
     parser.add_argument("url", help="Seed URL to crawl or fetch")
-    parser.add_argument("--output", default="output.jsonl", help="JSONL output file path (basic mode)")
-    parser.add_argument("--pretty", action="store_true", help="Pretty print JSON")
+    parser.add_argument("--output", default="output.jsonl", help="JSONL output path for basic mode")
+    parser.add_argument("--pretty", action="store_true", help="Pretty print JSON output")
     parser.add_argument("--max-tokens", type=int, default=1200, help="Max tokens per chunk")
-    parser.add_argument("--no-headless", action="store_true", help="Run browser in visible mode")
+    parser.add_argument("--no-headless", action="store_true", help="Run Playwright in visible (non-headless) mode")
 
-    # Stealth mode options
+    # Stealth mode arguments
     parser.add_argument("--stealth", action="store_true", help="Use StealthSpider with VPN enforcement")
     parser.add_argument("--vpn", type=str, default=None, help="VPN provider (default: nordvpn)")
     parser.add_argument("--region", type=str, default=None, help="VPN region (e.g. hong_kong)")
     parser.add_argument("--no-require-vpn", action="store_true", help="Do not fail if VPN not connected")
 
-    # Goal-driven mode options
-    parser.add_argument("--goal", type=str, default=None, help="Goal/question to answer")
-    parser.add_argument("--db", type=str, default="spider_core.db", help="SQLite database path for crawl data")
-    parser.add_argument("--max-pages", type=int, default=20, help="Max pages to visit in goal mode")
-    parser.add_argument("--confidence", type=float, default=0.85, help="Confidence threshold to stop in goal mode")
+    # Goal-oriented mode arguments
+    parser.add_argument("--goal", type=str, default=None, help="Goal or question to recursively answer")
+    parser.add_argument("--db", type=str, default="spider_core.db", help="SQLite DB path for crawl data (goal mode)")
+    parser.add_argument("--max-pages", type=int, default=25, help="Max pages to crawl in goal mode")
+    parser.add_argument("--confidence", type=float, default=0.85, help="Confidence threshold to stop goal mode")
+    parser.add_argument("--max-depth", type=int, default=3, help="Maximum recursion depth for goal mode")
 
     args = parser.parse_args()
 
     async def async_main():
+        # -----------------------------------------------------------------
+        # Shared components
+        # -----------------------------------------------------------------
         browser = PlaywrightBrowserClient(headless=not args.no_headless)
         llm = OpenAIGPTClient()
         ranker = RelevanceRanker(llm)
         chunker = TextChunker(max_tokens=args.max_tokens)
 
-        # -----------------------------------------------------------------------------
-        # GOAL MODE
-        # -----------------------------------------------------------------------------
+        # -----------------------------------------------------------------
+        # GOAL-ORIENTED MODE
+        # -----------------------------------------------------------------
         if args.goal:
             if not GOAL_AVAILABLE:
                 raise RuntimeError("Goal modules not found. Ensure goal_spider.py, goal_planner.py, and storage/db.py exist.")
@@ -286,10 +398,10 @@ def main():
             db = DB(args.db)
             planner = GoalPlanner(llm)
 
-            # Determine spider base
+            # Choose base spider (stealth or normal)
             if args.stealth:
                 if not STEALTH_AVAILABLE:
-                    raise RuntimeError("StealthSpider is not available. Install stealth module.")
+                    raise RuntimeError("StealthSpider not available. Install stealth module.")
                 vpn_provider = args.vpn or DEFAULT_VPN_PROVIDER
                 region = args.region or DEFAULT_REGION
                 require_vpn = not args.no_require_vpn
@@ -305,6 +417,7 @@ def main():
             else:
                 base_spider = BasicSpider(browser, ranker, chunker)
 
+            # Initialize the goal-oriented spider
             goal_spider = GoalOrientedSpider(
                 browser_client=browser,
                 relevance_ranker=ranker,
@@ -313,6 +426,7 @@ def main():
                 db=db,
                 stop_threshold=args.confidence,
                 max_pages=args.max_pages,
+                max_depth=args.max_depth,
             )
 
             try:
@@ -322,20 +436,19 @@ def main():
                 print(f"Confidence: {result['confidence']:.2f}")
                 print(f"Visited pages: {result['visited_count']}")
                 print("\nAnswer:")
-                print(result["answer"][:2000], "..." if len(result["answer"]) > 2000 else "", sep="")
+                print(result['answer'][:2000], "..." if len(result['answer']) > 2000 else "", sep="")
                 print("===================")
             finally:
                 await browser.close()
                 db.close()
             return
 
-        # -----------------------------------------------------------------------------
+        # -----------------------------------------------------------------
         # BASIC OR STEALTH MODE
-        # -----------------------------------------------------------------------------
+        # -----------------------------------------------------------------
         if args.stealth:
             if not STEALTH_AVAILABLE:
-                raise RuntimeError("StealthSpider is not available. Ensure stealth module is installed.")
-
+                raise RuntimeError("StealthSpider not available. Ensure stealth module installed.")
             vpn_provider = args.vpn or DEFAULT_VPN_PROVIDER
             region = args.region or DEFAULT_REGION
             require_vpn = not args.no_require_vpn
@@ -367,13 +480,13 @@ if __name__ == "__main__":
 
 ## `core_utils/__init__.py`
 
-```py
+```python
 
 ```
 
 ## `core_utils/chunking.py`
 
-```py
+```python
 import tiktoken
 from typing import List, Dict
 
@@ -471,7 +584,7 @@ class TextChunker:
 
 ## `core_utils/url_utils.py`
 
-```py
+```python
 from urllib.parse import urljoin, urlparse, urlunparse
 
 
@@ -494,173 +607,15 @@ def canonicalize_url(href: str, base_url: str) -> str | None:
 
 ```
 
-## `db.py`
-
-```py
-# storage/db.py
-import sqlite3, json, time
-from pathlib import Path
-from typing import Iterable, Optional, Any
-
-SCHEMA = """
-PRAGMA journal_mode=WAL;
-CREATE TABLE IF NOT EXISTS pages(
-  id INTEGER PRIMARY KEY,
-  url TEXT UNIQUE,
-  canonical TEXT,
-  status INTEGER,
-  fetched_at INTEGER,
-  title TEXT,
-  visible_text TEXT
-);
-
-CREATE TABLE IF NOT EXISTS links(
-  id INTEGER PRIMARY KEY,
-  from_url TEXT,
-  to_url TEXT,
-  anchor_text TEXT,
-  rel TEXT,
-  llm_score_est REAL DEFAULT 0.0,
-  llm_score_final REAL DEFAULT 0.0,
-  UNIQUE(from_url, to_url)
-);
-
-CREATE TABLE IF NOT EXISTS chunks(
-  id INTEGER PRIMARY KEY,
-  page_url TEXT,
-  chunk_id INTEGER,
-  text TEXT,
-  token_count INTEGER,
-  UNIQUE(page_url, chunk_id)
-);
-
--- Simple vector storage (float32 array as JSON; small, portable)
-CREATE TABLE IF NOT EXISTS embeddings(
-  id INTEGER PRIMARY KEY,
-  page_url TEXT,
-  chunk_id INTEGER,
-  vector TEXT,             -- json.dumps(list of floats)
-  model TEXT,
-  dim INTEGER,
-  created_at INTEGER,
-  UNIQUE(page_url, chunk_id, model)
-);
-
-CREATE TABLE IF NOT EXISTS crawl_log(
-  id INTEGER PRIMARY KEY,
-  url TEXT,
-  action TEXT,             -- queued, fetched, skipped, failed
-  reason TEXT,
-  ts INTEGER
-);
-
-CREATE INDEX IF NOT EXISTS idx_pages_url ON pages(url);
-CREATE INDEX IF NOT EXISTS idx_links_to ON links(to_url);
-CREATE INDEX IF NOT EXISTS idx_chunks_page ON chunks(page_url);
-CREATE INDEX IF NOT EXISTS idx_embeds_page ON embeddings(page_url);
-"""
-
-class DB:
-    def __init__(self, path: str = "spider_core.db"):
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(path, check_same_thread=False)
-        self.conn.execute("PRAGMA foreign_keys=ON")
-        self.conn.executescript(SCHEMA)
-        self.conn.commit()
-
-    def upsert_page(self, url: str, canonical: Optional[str], status: int, title: Optional[str], visible_text: str):
-        self.conn.execute(
-            """INSERT INTO pages(url, canonical, status, fetched_at, title, visible_text)
-               VALUES(?,?,?,?,?,?)
-               ON CONFLICT(url) DO UPDATE SET
-                 canonical=excluded.canonical,
-                 status=excluded.status,
-                 fetched_at=excluded.fetched_at,
-                 title=excluded.title,
-                 visible_text=excluded.visible_text
-            """,
-            (url, canonical, status, int(time.time()), title, visible_text),
-        )
-        self.conn.commit()
-
-    def upsert_links(self, from_url: str, links: Iterable[dict]):
-        rows = []
-        for l in links:
-            rows.append((
-                from_url, l["href"], l.get("text"), json.dumps(l.get("rel", [])),
-                float(l.get("llm_score", 0.0))
-            ))
-        self.conn.executemany(
-            """INSERT INTO links(from_url, to_url, anchor_text, rel, llm_score_est)
-               VALUES(?,?,?,?,?)
-               ON CONFLICT(from_url,to_url) DO UPDATE SET
-                 anchor_text=excluded.anchor_text,
-                 rel=excluded.rel,
-                 llm_score_est=excluded.llm_score_est
-            """,
-            rows
-        )
-        self.conn.commit()
-
-    def set_final_link_score(self, from_url: str, to_url: str, score: float):
-        self.conn.execute(
-            "UPDATE links SET llm_score_final=? WHERE from_url=? AND to_url=?",
-            (float(score), from_url, to_url)
-        )
-        self.conn.commit()
-
-    def upsert_chunks(self, page_url: str, chunks: Iterable[dict]):
-        rows = []
-        for c in chunks:
-            rows.append((page_url, int(c["chunk_id"]), c["text"], int(c["token_count"])))
-        self.conn.executemany(
-            """INSERT INTO chunks(page_url, chunk_id, text, token_count)
-               VALUES(?,?,?,?)
-               ON CONFLICT(page_url,chunk_id) DO UPDATE SET
-                 text=excluded.text,
-                 token_count=excluded.token_count
-            """, rows
-        )
-        self.conn.commit()
-
-    def upsert_embedding(self, page_url: str, chunk_id: int, vec: list[float], model: str, dim: int):
-        self.conn.execute(
-            """INSERT INTO embeddings(page_url,chunk_id,vector,model,dim,created_at)
-               VALUES(?,?,?,?,?,?)
-               ON CONFLICT(page_url,chunk_id,model) DO UPDATE SET
-                 vector=excluded.vector,
-                 dim=excluded.dim,
-                 created_at=excluded.created_at
-            """,
-            (page_url, chunk_id, json.dumps(vec), model, dim, int(time.time()))
-        )
-        self.conn.commit()
-
-    def already_fetched(self, url: str) -> bool:
-        r = self.conn.execute("SELECT 1 FROM pages WHERE url=? LIMIT 1", (url,)).fetchone()
-        return r is not None
-
-    def log(self, url: str, action: str, reason: Optional[str] = None):
-        self.conn.execute(
-            "INSERT INTO crawl_log(url,action,reason,ts) VALUES(?,?,?,?)",
-            (url, action, reason, int(time.time()))
-        )
-        self.conn.commit()
-
-    def close(self):
-        self.conn.close()
-
-```
-
 ## `extractors/__init__.py`
 
-```py
+```python
 
 ```
 
 ## `extractors/deterministic_extractor.py`
 
-```py
+```python
 from typing import List
 from bs4 import BeautifulSoup
 from spider_core.base.link_metadata import LinkMetadata
@@ -733,7 +688,7 @@ class DeterministicLinkExtractor:
 
 ## `goal/__init__.py`
 
-```py
+```python
 """
 Goal module: handles goal-driven reasoning and planning for the spider.
 """
@@ -743,9 +698,9 @@ __all__ = ["GoalPlanner"]
 
 ```
 
-## `goal_planner.py`
+## `goal/goal_planner.py`
 
-```py
+```python
 # goal/goal_planner.py
 from typing import List, Dict, Any
 from spider_core.llm.openai_gpt_client import OpenAIGPTClient
@@ -788,13 +743,13 @@ class GoalPlanner:
 
 ## `llm/__init__.py`
 
-```py
+```python
 
 ```
 
 ## `llm/embeddings_client.py`
 
-```py
+```python
 # llm/embeddings_client.py
 from abc import ABC, abstractmethod
 from typing import List
@@ -828,7 +783,7 @@ def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
 
 ## `llm/llm_client.py`
 
-```py
+```python
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
@@ -849,7 +804,7 @@ class LLMClient(ABC):
 
 ## `llm/openai_gpt_client.py`
 
-```py
+```python
 import json
 import asyncio
 import os
@@ -926,7 +881,7 @@ class OpenAIGPTClient:
 
 ## `llm/relevance_ranker.py`
 
-```py
+```python
 import asyncio
 from typing import List, Dict
 from spider_core.base.link_metadata import LinkMetadata
@@ -997,7 +952,7 @@ class RelevanceRanker:
 
 ## `requirements.txt`
 
-```txt
+```text
 playwright>=1.42.0
 openai>=1.3.0
 pydantic>=2.5.0
@@ -1009,13 +964,13 @@ tiktoken>=0.6.0
 
 ## `spiders/__init__.py`
 
-```py
+```python
 
 ```
 
 ## `spiders/basic_spider.py`
 
-```py
+```python
 import asyncio
 import logging
 from datetime import datetime
@@ -1206,15 +1161,12 @@ class BasicSpider:
 
 ## `spiders/goal_spider.py`
 
-```py
-import asyncio, heapq, logging
-from typing import Dict, Tuple, Optional, List
+```python
+import asyncio
+import logging
+from typing import Set, List, Dict, Optional
 from datetime import datetime
-
-from spider_core.spiders.basic_spider import BasicSpider, maybe_await
-from spider_core.goal.goal_planner import GoalPlanner
-from spider_core.storage.db import DB
-from spider_core.llm.embeddings_client import EmbeddingsClient, OpenAIEmbeddings
+from spider_core.spiders.basic_spider import BasicSpider
 from spider_core.base.page_result import PageResult
 from spider_core.base.link_metadata import LinkMetadata
 
@@ -1222,128 +1174,89 @@ logger = logging.getLogger("goal_spider")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
     ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter("[GoalSpider] %(levelname)s %(message)s"))
+    ch.setFormatter(logging.Formatter("[GoalSpider] %(message)s"))
     logger.addHandler(ch)
 
-class GoalOrientedSpider(BasicSpider):
+
+class GoalSpider(BasicSpider):
     """
-    Goal-driven crawler that:
-     - Starts from a seed URL
-     - Iteratively fetches pages based on goal-conditioned relevance
-     - Aggregates an answer and stops when confidence >= threshold or budget exhausted
-     - Stores pages/chunks in SQLite and vectorizes chunks for RAG
+    GoalSpider recursively crawls pages until the given goal is achieved.
+    Example goal: 'Find contact email'
     """
-    def __init__(self,
-                 browser_client,
-                 relevance_ranker,
-                 chunker,
-                 planner: GoalPlanner,
-                 db: DB,
-                 embedder: Optional[EmbeddingsClient] = None,
-                 embed_model: str = "text-embedding-3-small",
-                 stop_threshold: float = 0.85,
-                 max_pages: int = 20):
+
+    def __init__(self, browser_client, relevance_ranker, chunker, llm_client, max_depth: int = 3):
         super().__init__(browser_client, relevance_ranker, chunker)
-        self.planner = planner
-        self.db = db
-        self.embedder = embedder or OpenAIEmbeddings(model=embed_model)
-        self.embed_model = embed_model
-        self.stop_threshold = stop_threshold
-        self.max_pages = max_pages
+        self.llm_client = llm_client
+        self.max_depth = max_depth
+        self.visited: Set[str] = set()
+        self.goal_result: Optional[str] = None
+        self.confidence: float = 0.0
 
-    async def fetch_goal(self, seed_url: str, goal: str) -> Dict:
-        """
-        Returns dict with final answer, confidence, visited_count, and trace.
-        """
-        # frontier: max-heap by priority (negated for heapq)
-        frontier: List[Tuple[float, str, Optional[str]]] = []
-        seen = set()
-        answer_parts: List[str] = []
-        final_conf = 0.0
-        visited = 0
-        trace = []
+    async def _check_goal(self, page: PageResult, goal: str) -> Dict:
+        """Ask the LLM if the goal is satisfied on this page."""
+        system_prompt = (
+            "You are a goal evaluator for a web crawler. "
+            "Given a user goal and a web page's text content, "
+            "determine if the goal has been achieved. "
+            "Return JSON with keys: {'found': bool, 'confidence': float, 'answer': str}."
+        )
+        user_prompt = f"GOAL: {goal}\n\nPAGE TEXT:\n{page.page_chunks[0]['text'][:4000] if page.page_chunks else ''}"
+        try:
+            response = await self.llm_client.complete_json(system_prompt, user_prompt)
+            return response
+        except Exception as e:
+            logger.warning(f"Goal check failed: {e}")
+            return {"found": False, "confidence": 0.0, "answer": ""}
 
-        # seed
-        heapq.heappush(frontier, (-1.0, seed_url, None))  # (priority, url, from_url)
+    async def crawl_until_goal(self, start_url: str, goal: str, depth: int = 0) -> Optional[PageResult]:
+        """Recursive crawler that continues until goal found or depth exhausted."""
+        if depth > self.max_depth:
+            return None
+        if start_url in self.visited:
+            return None
+        self.visited.add(start_url)
 
-        while frontier and visited < self.max_pages and final_conf < self.stop_threshold:
-            priority, url, parent = heapq.heappop(frontier)
-            if url in seen:
-                continue
-            seen.add(url)
+        logger.info(f"[Depth {depth}] Crawling: {start_url}")
+        page = await self.fetch(start_url)
+        goal_check = await self._check_goal(page, goal)
 
-            # fetch page (no LLM scoring yet; BasicSpider flow)
-            page: PageResult = await self._fetch_without_llm(url)
+        if goal_check.get("found") and goal_check.get("confidence", 0) > 0.7:
+            logger.info(f"✅ Goal achieved at {start_url} (confidence={goal_check['confidence']})")
+            self.goal_result = goal_check.get("answer")
+            self.confidence = goal_check.get("confidence", 1.0)
+            return page
 
-            # persist page + links + chunks
-            title = None
-            try:
-                # naive title grab from first chunk (can be improved)
-                first_text = page.page_chunks[0]["text"] if page.page_chunks else ""
-                title = (first_text.split("\n", 1)[0] or "").strip()[:200] or None
-            except Exception:
-                pass
+        # Recurse into high-ranking links
+        sorted_links = sorted(page.links, key=lambda l: getattr(l, "llm_score", 0.0), reverse=True)
+        for link in sorted_links[:5]:  # limit fan-out
+            if link.href not in self.visited:
+                result = await self.crawl_until_goal(link.href, goal, depth + 1)
+                if result is not None:
+                    return result
+        return None
 
-            self.db.upsert_page(url, page.canonical, page.status, title, "\n\n".join([c["text"] for c in page.page_chunks or []]))
-            self.db.upsert_links(url, [l.__dict__ for l in page.links])
-            self.db.upsert_chunks(url, page.page_chunks or [])
-            self.db.log(url, "fetched", reason=f"priority={-priority}")
-
-            # embed chunks
-            texts = [c["text"] for c in page.page_chunks or []]
-            if texts:
-                vecs = self.embedder.embed(texts)
-                for c, v in zip(page.page_chunks, vecs):
-                    self.db.upsert_embedding(url, c["chunk_id"], v, self.embed_model, len(v))
-
-            # goal-conditioned evaluation over chunks
-            goal_conf_this_page = 0.0
-            link_scores_accum: Dict[str, float] = {}
-            for chunk in (page.page_chunks or []):
-                est, delta, scored = await self.planner.evaluate_chunk(
-                    goal, chunk["text"],
-                    [{"href": l.href, "text": l.text or ""} for l in page.links]
-                )
-                goal_conf_this_page = max(goal_conf_this_page, est)
-                if delta:
-                    answer_parts.append(delta)
-                # merge scores
-                for href, s in scored.items():
-                    link_scores_accum[href] = max(link_scores_accum.get(href, 0.0), s)
-
-            final_conf = max(final_conf, goal_conf_this_page)
-            trace.append({"url": url, "page_conf": goal_conf_this_page, "picked": sorted(link_scores_accum.items(), key=lambda x: x[1], reverse=True)[:5]})
-            visited += 1
-
-            # rank outgoing links by goal-conditioned scores; push to frontier
-            for l in page.links:
-                score = float(link_scores_accum.get(l.href, 0.0))
-                # if planner didn't score it, fall back to LLM link relevance (if present)
-                if score == 0.0:
-                    score = float(getattr(l, "llm_score", 0.0))
-                if l.href not in seen and score > 0.0:
-                    heapq.heappush(frontier, (-(score + 1e-6), l.href, url))
-                    self.db.set_final_link_score(url, l.href, score)
-
+    async def run_goal(self, start_url: str, goal: str) -> Dict:
+        """Entrypoint for CLI or programmatic use."""
+        page = await self.crawl_until_goal(start_url, goal)
         return {
             "goal": goal,
-            "confidence": final_conf,
-            "visited_count": visited,
-            "answer": "\n".join(answer_parts).strip(),
-            "trace": trace,
+            "found": self.goal_result is not None,
+            "confidence": self.confidence,
+            "answer": self.goal_result,
+            "visited_pages": len(self.visited),
         }
 
 ```
 
 ## `spiders/stealth/__init__.py`
 
-```py
+```python
 
 ```
 
 ## `spiders/stealth/stealth_config.py`
 
-```py
+```python
 # spiders/stealth/stealth_config.py
 # Configuration defaults for StealthSpider / VPN behavior.
 
@@ -1364,7 +1277,7 @@ MAX_CONNECT_RETRIES = 2
 
 ## `spiders/stealth/stealth_spider.py`
 
-```py
+```python
 """
 StealthSpider: extends BasicSpider to perform fetches while routing
 page loads through a VPN (NordVPN CLI). Important LLM calls will be
@@ -1515,7 +1428,7 @@ class StealthSpider(BasicSpider):
 
 ## `spiders/stealth/vpn_manager.py`
 
-```py
+```python
 # spiders/stealth/vpn_manager.py
 """
 VPN helper for StealthSpider.
@@ -1716,7 +1629,7 @@ class VPNManager:
 
 ## `storage/__init__.py`
 
-```py
+```python
 """
 Storage module: database and persistence layer for crawled pages and embeddings.
 """
@@ -1726,9 +1639,167 @@ __all__ = ["DB"]
 
 ```
 
+## `storage/db.py`
+
+```python
+# storage/db.py
+import sqlite3, json, time
+from pathlib import Path
+from typing import Iterable, Optional, Any
+
+SCHEMA = """
+PRAGMA journal_mode=WAL;
+CREATE TABLE IF NOT EXISTS pages(
+  id INTEGER PRIMARY KEY,
+  url TEXT UNIQUE,
+  canonical TEXT,
+  status INTEGER,
+  fetched_at INTEGER,
+  title TEXT,
+  visible_text TEXT
+);
+
+CREATE TABLE IF NOT EXISTS links(
+  id INTEGER PRIMARY KEY,
+  from_url TEXT,
+  to_url TEXT,
+  anchor_text TEXT,
+  rel TEXT,
+  llm_score_est REAL DEFAULT 0.0,
+  llm_score_final REAL DEFAULT 0.0,
+  UNIQUE(from_url, to_url)
+);
+
+CREATE TABLE IF NOT EXISTS chunks(
+  id INTEGER PRIMARY KEY,
+  page_url TEXT,
+  chunk_id INTEGER,
+  text TEXT,
+  token_count INTEGER,
+  UNIQUE(page_url, chunk_id)
+);
+
+-- Simple vector storage (float32 array as JSON; small, portable)
+CREATE TABLE IF NOT EXISTS embeddings(
+  id INTEGER PRIMARY KEY,
+  page_url TEXT,
+  chunk_id INTEGER,
+  vector TEXT,             -- json.dumps(list of floats)
+  model TEXT,
+  dim INTEGER,
+  created_at INTEGER,
+  UNIQUE(page_url, chunk_id, model)
+);
+
+CREATE TABLE IF NOT EXISTS crawl_log(
+  id INTEGER PRIMARY KEY,
+  url TEXT,
+  action TEXT,             -- queued, fetched, skipped, failed
+  reason TEXT,
+  ts INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_pages_url ON pages(url);
+CREATE INDEX IF NOT EXISTS idx_links_to ON links(to_url);
+CREATE INDEX IF NOT EXISTS idx_chunks_page ON chunks(page_url);
+CREATE INDEX IF NOT EXISTS idx_embeds_page ON embeddings(page_url);
+"""
+
+class DB:
+    def __init__(self, path: str = "spider_core.db"):
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(path, check_same_thread=False)
+        self.conn.execute("PRAGMA foreign_keys=ON")
+        self.conn.executescript(SCHEMA)
+        self.conn.commit()
+
+    def upsert_page(self, url: str, canonical: Optional[str], status: int, title: Optional[str], visible_text: str):
+        self.conn.execute(
+            """INSERT INTO pages(url, canonical, status, fetched_at, title, visible_text)
+               VALUES(?,?,?,?,?,?)
+               ON CONFLICT(url) DO UPDATE SET
+                 canonical=excluded.canonical,
+                 status=excluded.status,
+                 fetched_at=excluded.fetched_at,
+                 title=excluded.title,
+                 visible_text=excluded.visible_text
+            """,
+            (url, canonical, status, int(time.time()), title, visible_text),
+        )
+        self.conn.commit()
+
+    def upsert_links(self, from_url: str, links: Iterable[dict]):
+        rows = []
+        for l in links:
+            rows.append((
+                from_url, l["href"], l.get("text"), json.dumps(l.get("rel", [])),
+                float(l.get("llm_score", 0.0))
+            ))
+        self.conn.executemany(
+            """INSERT INTO links(from_url, to_url, anchor_text, rel, llm_score_est)
+               VALUES(?,?,?,?,?)
+               ON CONFLICT(from_url,to_url) DO UPDATE SET
+                 anchor_text=excluded.anchor_text,
+                 rel=excluded.rel,
+                 llm_score_est=excluded.llm_score_est
+            """,
+            rows
+        )
+        self.conn.commit()
+
+    def set_final_link_score(self, from_url: str, to_url: str, score: float):
+        self.conn.execute(
+            "UPDATE links SET llm_score_final=? WHERE from_url=? AND to_url=?",
+            (float(score), from_url, to_url)
+        )
+        self.conn.commit()
+
+    def upsert_chunks(self, page_url: str, chunks: Iterable[dict]):
+        rows = []
+        for c in chunks:
+            rows.append((page_url, int(c["chunk_id"]), c["text"], int(c["token_count"])))
+        self.conn.executemany(
+            """INSERT INTO chunks(page_url, chunk_id, text, token_count)
+               VALUES(?,?,?,?)
+               ON CONFLICT(page_url,chunk_id) DO UPDATE SET
+                 text=excluded.text,
+                 token_count=excluded.token_count
+            """, rows
+        )
+        self.conn.commit()
+
+    def upsert_embedding(self, page_url: str, chunk_id: int, vec: list[float], model: str, dim: int):
+        self.conn.execute(
+            """INSERT INTO embeddings(page_url,chunk_id,vector,model,dim,created_at)
+               VALUES(?,?,?,?,?,?)
+               ON CONFLICT(page_url,chunk_id,model) DO UPDATE SET
+                 vector=excluded.vector,
+                 dim=excluded.dim,
+                 created_at=excluded.created_at
+            """,
+            (page_url, chunk_id, json.dumps(vec), model, dim, int(time.time()))
+        )
+        self.conn.commit()
+
+    def already_fetched(self, url: str) -> bool:
+        r = self.conn.execute("SELECT 1 FROM pages WHERE url=? LIMIT 1", (url,)).fetchone()
+        return r is not None
+
+    def log(self, url: str, action: str, reason: Optional[str] = None):
+        self.conn.execute(
+            "INSERT INTO crawl_log(url,action,reason,ts) VALUES(?,?,?,?)",
+            (url, action, reason, int(time.time()))
+        )
+        self.conn.commit()
+
+    def close(self):
+        self.conn.close()
+
+```
+
 ## `test/test.py`
 
-```py
+```python
 import asyncio
 from browser.playwright_client import PlaywrightBrowserClient
 
@@ -1746,7 +1817,7 @@ asyncio.run(test())
 
 ## `test/test2.py`
 
-```py
+```python
 from extractors.deterministic_extractor import DeterministicLinkExtractor
 
 sample_html = """
@@ -1764,7 +1835,7 @@ for link in links:
 
 ## `test/test3.py`
 
-```py
+```python
 from core_utils.chunking import TextChunker
 
 text = """
@@ -1781,7 +1852,7 @@ for c in chunks:
 
 ## `test/test4.py`
 
-```py
+```python
 from llm.openai_gpt_client import OpenAIGPTClient
 import asyncio
 
@@ -1799,7 +1870,7 @@ asyncio.run(main())
 
 ## `test/test_ranker.py`
 
-```py
+```python
 import asyncio
 from llm.openai_gpt_client import OpenAIGPTClient
 from llm.relevance_ranker import RelevanceRanker
@@ -1826,7 +1897,7 @@ asyncio.run(main())
 
 ## `test/test_spider.py`
 
-```py
+```python
 import asyncio
 from browser.playwright_client import PlaywrightBrowserClient
 from core_utils.chunking import TextChunker
@@ -1851,3 +1922,57 @@ asyncio.run(main())
 
 ```
 
+<details>
+<summary>📁 Final Project Structure</summary>
+
+```
+📁 base/
+    📄 __init__.py
+    📄 link_metadata.py
+    📄 page_result.py
+    📄 spider.py
+📁 browser/
+    📄 __init__.py
+    📄 browser_client.py
+    📄 playwright_client.py
+📁 core_utils/
+    📄 __init__.py
+    📄 chunking.py
+    📄 url_utils.py
+📁 extractors/
+    📄 __init__.py
+    📄 deterministic_extractor.py
+📁 goal/
+    📄 __init__.py
+    📄 goal_planner.py
+📁 llm/
+    📄 __init__.py
+    📄 embeddings_client.py
+    📄 llm_client.py
+    📄 openai_gpt_client.py
+    📄 relevance_ranker.py
+📁 spiders/
+    📁 stealth/
+        📄 __init__.py
+        📄 stealth_config.py
+        📄 stealth_spider.py
+        📄 vpn_manager.py
+    📄 __init__.py
+    📄 basic_spider.py
+    📄 goal_spider.py
+📁 storage/
+    📄 __init__.py
+    📄 db.py
+📁 test/
+    📄 test.py
+    📄 test2.py
+    📄 test3.py
+    📄 test4.py
+    📄 test_ranker.py
+    📄 test_spider.py
+📄 __init__.py
+📄 cli_spider.py
+📄 requirements.txt
+```
+
+</details>

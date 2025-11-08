@@ -1,11 +1,8 @@
-import asyncio, heapq, logging
-from typing import Dict, Tuple, Optional, List
+import asyncio
+import logging
+from typing import Set, List, Dict, Optional
 from datetime import datetime
-
-from spider_core.spiders.basic_spider import BasicSpider, maybe_await
-from spider_core.goal.goal_planner import GoalPlanner
-from spider_core.storage.db import DB
-from spider_core.llm.embeddings_client import EmbeddingsClient, OpenAIEmbeddings
+from spider_core.spiders.basic_spider import BasicSpider
 from spider_core.base.page_result import PageResult
 from spider_core.base.link_metadata import LinkMetadata
 
@@ -13,113 +10,74 @@ logger = logging.getLogger("goal_spider")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
     ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter("[GoalSpider] %(levelname)s %(message)s"))
+    ch.setFormatter(logging.Formatter("[GoalSpider] %(message)s"))
     logger.addHandler(ch)
 
-class GoalOrientedSpider(BasicSpider):
+
+class GoalSpider(BasicSpider):
     """
-    Goal-driven crawler that:
-     - Starts from a seed URL
-     - Iteratively fetches pages based on goal-conditioned relevance
-     - Aggregates an answer and stops when confidence >= threshold or budget exhausted
-     - Stores pages/chunks in SQLite and vectorizes chunks for RAG
+    GoalSpider recursively crawls pages until the given goal is achieved.
+    Example goal: 'Find contact email'
     """
-    def __init__(self,
-                 browser_client,
-                 relevance_ranker,
-                 chunker,
-                 planner: GoalPlanner,
-                 db: DB,
-                 embedder: Optional[EmbeddingsClient] = None,
-                 embed_model: str = "text-embedding-3-small",
-                 stop_threshold: float = 0.85,
-                 max_pages: int = 20):
+
+    def __init__(self, browser_client, relevance_ranker, chunker, llm_client, max_depth: int = 3):
         super().__init__(browser_client, relevance_ranker, chunker)
-        self.planner = planner
-        self.db = db
-        self.embedder = embedder or OpenAIEmbeddings(model=embed_model)
-        self.embed_model = embed_model
-        self.stop_threshold = stop_threshold
-        self.max_pages = max_pages
+        self.llm_client = llm_client
+        self.max_depth = max_depth
+        self.visited: Set[str] = set()
+        self.goal_result: Optional[str] = None
+        self.confidence: float = 0.0
 
-    async def fetch_goal(self, seed_url: str, goal: str) -> Dict:
-        """
-        Returns dict with final answer, confidence, visited_count, and trace.
-        """
-        # frontier: max-heap by priority (negated for heapq)
-        frontier: List[Tuple[float, str, Optional[str]]] = []
-        seen = set()
-        answer_parts: List[str] = []
-        final_conf = 0.0
-        visited = 0
-        trace = []
+    async def _check_goal(self, page: PageResult, goal: str) -> Dict:
+        """Ask the LLM if the goal is satisfied on this page."""
+        system_prompt = (
+            "You are a goal evaluator for a web crawler. "
+            "Given a user goal and a web page's text content, "
+            "determine if the goal has been achieved. "
+            "Return JSON with keys: {'found': bool, 'confidence': float, 'answer': str}."
+        )
+        user_prompt = f"GOAL: {goal}\n\nPAGE TEXT:\n{page.page_chunks[0]['text'][:4000] if page.page_chunks else ''}"
+        try:
+            response = await self.llm_client.complete_json(system_prompt, user_prompt)
+            return response
+        except Exception as e:
+            logger.warning(f"Goal check failed: {e}")
+            return {"found": False, "confidence": 0.0, "answer": ""}
 
-        # seed
-        heapq.heappush(frontier, (-1.0, seed_url, None))  # (priority, url, from_url)
+    async def crawl_until_goal(self, start_url: str, goal: str, depth: int = 0) -> Optional[PageResult]:
+        """Recursive crawler that continues until goal found or depth exhausted."""
+        if depth > self.max_depth:
+            return None
+        if start_url in self.visited:
+            return None
+        self.visited.add(start_url)
 
-        while frontier and visited < self.max_pages and final_conf < self.stop_threshold:
-            priority, url, parent = heapq.heappop(frontier)
-            if url in seen:
-                continue
-            seen.add(url)
+        logger.info(f"[Depth {depth}] Crawling: {start_url}")
+        page = await self.fetch(start_url)
+        goal_check = await self._check_goal(page, goal)
 
-            # fetch page (no LLM scoring yet; BasicSpider flow)
-            page: PageResult = await self._fetch_without_llm(url)
+        if goal_check.get("found") and goal_check.get("confidence", 0) > 0.7:
+            logger.info(f"✅ Goal achieved at {start_url} (confidence={goal_check['confidence']})")
+            self.goal_result = goal_check.get("answer")
+            self.confidence = goal_check.get("confidence", 1.0)
+            return page
 
-            # persist page + links + chunks
-            title = None
-            try:
-                # naive title grab from first chunk (can be improved)
-                first_text = page.page_chunks[0]["text"] if page.page_chunks else ""
-                title = (first_text.split("\n", 1)[0] or "").strip()[:200] or None
-            except Exception:
-                pass
+        # Recurse into high-ranking links
+        sorted_links = sorted(page.links, key=lambda l: getattr(l, "llm_score", 0.0), reverse=True)
+        for link in sorted_links[:5]:  # limit fan-out
+            if link.href not in self.visited:
+                result = await self.crawl_until_goal(link.href, goal, depth + 1)
+                if result is not None:
+                    return result
+        return None
 
-            self.db.upsert_page(url, page.canonical, page.status, title, "\n\n".join([c["text"] for c in page.page_chunks or []]))
-            self.db.upsert_links(url, [l.__dict__ for l in page.links])
-            self.db.upsert_chunks(url, page.page_chunks or [])
-            self.db.log(url, "fetched", reason=f"priority={-priority}")
-
-            # embed chunks
-            texts = [c["text"] for c in page.page_chunks or []]
-            if texts:
-                vecs = self.embedder.embed(texts)
-                for c, v in zip(page.page_chunks, vecs):
-                    self.db.upsert_embedding(url, c["chunk_id"], v, self.embed_model, len(v))
-
-            # goal-conditioned evaluation over chunks
-            goal_conf_this_page = 0.0
-            link_scores_accum: Dict[str, float] = {}
-            for chunk in (page.page_chunks or []):
-                est, delta, scored = await self.planner.evaluate_chunk(
-                    goal, chunk["text"],
-                    [{"href": l.href, "text": l.text or ""} for l in page.links]
-                )
-                goal_conf_this_page = max(goal_conf_this_page, est)
-                if delta:
-                    answer_parts.append(delta)
-                # merge scores
-                for href, s in scored.items():
-                    link_scores_accum[href] = max(link_scores_accum.get(href, 0.0), s)
-
-            final_conf = max(final_conf, goal_conf_this_page)
-            trace.append({"url": url, "page_conf": goal_conf_this_page, "picked": sorted(link_scores_accum.items(), key=lambda x: x[1], reverse=True)[:5]})
-            visited += 1
-
-            # rank outgoing links by goal-conditioned scores; push to frontier
-            for l in page.links:
-                score = float(link_scores_accum.get(l.href, 0.0))
-                # if planner didn't score it, fall back to LLM link relevance (if present)
-                if score == 0.0:
-                    score = float(getattr(l, "llm_score", 0.0))
-                if l.href not in seen and score > 0.0:
-                    heapq.heappush(frontier, (-(score + 1e-6), l.href, url))
-                    self.db.set_final_link_score(url, l.href, score)
-
+    async def run_goal(self, start_url: str, goal: str) -> Dict:
+        """Entrypoint for CLI or programmatic use."""
+        page = await self.crawl_until_goal(start_url, goal)
         return {
             "goal": goal,
-            "confidence": final_conf,
-            "visited_count": visited,
-            "answer": "\n".join(answer_parts).strip(),
-            "trace": trace,
+            "found": self.goal_result is not None,
+            "confidence": self.confidence,
+            "answer": self.goal_result,
+            "visited_pages": len(self.visited),
         }
